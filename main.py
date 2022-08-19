@@ -1,3 +1,5 @@
+import argparse
+import asyncio
 import inspect
 import os
 import pathlib
@@ -162,10 +164,8 @@ class WriteDataToModel(PrettyTable):
             else:
                 self.fail_install.append(install_res[1])
 
-        self.statistic_result()
-
     def upgrade_packages(self):
-        self._has_packages(self.packages, self._upgrade_packages)
+        return self._has_packages(self.packages, self._upgrade_packages)
 
     def _statistic_result(self):
         print("-" * 60)
@@ -183,11 +183,15 @@ class WriteDataToModel(PrettyTable):
         )
 
     def statistic_result(self):
-        self._has_packages(self.packages, self._statistic_result)
+        return self._has_packages(self.packages, self._statistic_result)
 
     def _has_packages(self, /, packages: Optional[List[List[str]]], cb_func: Callable):
         if packages:
             cb_func()
+
+    def __call__(self, *args, **kwargs):
+        self.upgrade_packages()
+        self.statistic_result()
 
 
 def upgrade_expired_package(package_name: str, old_version: str, latest_version: str):
@@ -210,9 +214,51 @@ def upgrade_expired_package(package_name: str, old_version: str, latest_version:
         return update_res_bool, package_name
 
 
+async def run_async(class_name: "WriteDataToModel"):
+    expired_packages = class_name.packages
+    loop = asyncio.get_event_loop()
+
+    cmd_s = [
+        loop.run_in_executor(
+            None, upgrade_expired_package, *(package[0], package[1], package[2])
+        )
+        for package in expired_packages
+    ]
+
+    res_list = await asyncio.gather(*cmd_s)
+
+    for result in res_list:
+        res_bool, pak_name = result
+        if res_bool:
+            class_name.success_install.append(pak_name)
+        else:
+            class_name.fail_install.append(pak_name)
+
+    class_name.statistic_result()
+
+
 if __name__ == "__main__":
+    parse = argparse.ArgumentParser(description="Upgrade python lib.")
+    parse.add_argument(
+        "-a",
+        "--async_upgrade",
+        help="Update the library asynchronously.",
+        action="store_true",
+    )
+
+    args = parse.parse_args()
+
     time_s = time.time()
     wdt = WriteDataToModel()
     wdt.pretty_table()
-    wdt.upgrade_packages()
-    print(Fore.MAGENTA + f'Total time elapsed: {Fore.CYAN}{time.time() - time_s} s.' + Style.RESET_ALL)
+
+    if args.async_upgrade:
+        asyncio.run(run_async(wdt))
+    else:
+        wdt()
+
+    print(
+        Fore.MAGENTA
+        + f"Total time elapsed: {Fore.CYAN}{time.time() - time_s} s."
+        + Style.RESET_ALL
+    )

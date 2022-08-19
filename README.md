@@ -29,3 +29,14 @@ python3 main.py
 ![img_4.png](screenshoot/img_4.png)
 ![img_2.png](screenshoot/img_2.png)
 ![img_3.png](screenshoot/img_3.png)
+
+* Update the pkg synchronously
+
+![img_1.png](screenshoot/img_1.png)
+
+* Update the pkg asynchronously
+
+![img_5.png](screenshoot/img_5.png)
+
+We can see that the async method is faster than sync method about 9 seconds(Only in this test situation).
+So now it can support to update the python libraries asynchronously. 🥳
