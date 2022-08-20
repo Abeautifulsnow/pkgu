@@ -1,5 +1,6 @@
 import os
 import sys
+from os.path import dirname, join, realpath
 from shutil import rmtree
 
 from setuptools import Command, find_packages, setup
@@ -18,15 +19,17 @@ __keywords__ = ["python", "pip", "pip install pkg --upgrade", "pip-update"]
 __modules__ = ["pipu", "-version"]
 
 # Load the package's _version.py module as a dictionary.
-here = os.path.abspath(os.path.dirname(__file__))
+PROJECT_ROOT = dirname(realpath(__file__))
 about = {}
-with open(os.path.join(here, "_version.py")) as f:
+with open(join(PROJECT_ROOT, "_version.py")) as f:
     exec(f.read(), about)
 
 
-with open("./README.md", "r") as md_read:
+with open(join(PROJECT_ROOT, "README.md"), "r") as md_read:
     __long_description__ = md_read.read()
 
+with open(join(PROJECT_ROOT, "requirements.txt"), "r") as f:
+    __install_reqs__ = f.read().splitlines()
 
 __version__ = about["__version__"]
 
@@ -48,9 +51,9 @@ class UploadCommand(Command):
     def run(self):
         try:
             self.status("Removing previous builds…")
-            rmtree(os.path.join(here, "dist"))
-            rmtree(os.path.join(here, "build"))
-            rmtree(os.path.join(here, "{0}.egg-info".format(__title__)))
+            rmtree(os.path.join(PROJECT_ROOT, "dist"))
+            rmtree(os.path.join(PROJECT_ROOT, "build"))
+            rmtree(os.path.join(PROJECT_ROOT, "{0}.egg-info".format(__title__)))
         except OSError:
             pass
 
@@ -83,6 +86,7 @@ setup(
     long_description=__long_description__,
     long_description_content_type="text/markdown",
     include_package_data=True,
+    install_requires=__install_reqs__,
     classifiers=[
         "Development Status :: 4 - Beta",
         "Environment :: Console",
