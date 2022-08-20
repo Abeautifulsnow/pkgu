@@ -6,7 +6,7 @@ from setuptools import Command, find_packages, setup
 
 # $ python setup.py upload
 
-__title__ = "pipu"
+__title__ = "pkgu"
 __description__ = (
     "Find the out-dated packages installed by the Pip tool and update them."
 )
@@ -22,6 +22,10 @@ here = os.path.abspath(os.path.dirname(__file__))
 about = {}
 with open(os.path.join(here, "_version.py")) as f:
     exec(f.read(), about)
+
+
+with open("./README.md", "r") as md_read:
+    __long_description__ = md_read.read()
 
 
 __version__ = about["__version__"]
@@ -54,11 +58,12 @@ class UploadCommand(Command):
         os.system("{0} setup.py bdist_wheel".format(sys.executable))
 
         self.status("Uploading the package to PyPI via Twine…")
-        os.system("twine upload dist/* --verbose")
+        return_code = os.system("twine upload dist/* --verbose")
 
-        self.status("Pushing git tags…")
-        os.system('git tag -a v{0} -m "release version v{0}"'.format(__version__))
-        os.system("git push origin v{0}".format(__version__))
+        if not return_code:
+            self.status("Pushing git tags…")
+            os.system('git tag -a v{0} -m "release version v{0}"'.format(__version__))
+            os.system("git push origin v{0}".format(__version__))
 
         sys.exit()
 
@@ -75,6 +80,8 @@ setup(
     keywords=__keywords__,
     py_modules=__modules__,
     zip_safe=False,
+    long_description=__long_description__,
+    long_description_content_type="text/markdown",
     include_package_data=True,
     classifiers=[
         "Development Status :: 4 - Beta",
