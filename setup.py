@@ -15,7 +15,7 @@ __author_email__ = "lcprunstone@163.com"
 __license__ = "MIT"
 
 __keywords__ = ["python", "pip", "pip install pkg --upgrade", "pip-update"]
-__modules__ = ["main"]
+__modules__ = ["pipu", "-version"]
 
 # Load the package's _version.py module as a dictionary.
 here = os.path.abspath(os.path.dirname(__file__))

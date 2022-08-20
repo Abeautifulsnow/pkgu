@@ -15,7 +15,7 @@ poetry install
 and then, run `main.py` script.
 
 ```bash
-python3 main.py
+python3 pipu.py
 ```
 
 ## ScreenShoot
