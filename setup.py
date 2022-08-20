@@ -101,4 +101,5 @@ setup(
         "Topic :: Software Development :: Libraries",
     ],
     cmdclass={"upload": UploadCommand},
+    entry_points={"console_scripts": ["pipu=pipu:entry"]},
 )

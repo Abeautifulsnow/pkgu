@@ -237,7 +237,7 @@ async def run_async(class_name: "WriteDataToModel"):
     class_name.statistic_result()
 
 
-if __name__ == "__main__":
+def entry():
     parse = argparse.ArgumentParser(description="Upgrade python lib.")
     parse.add_argument(
         "-a",
@@ -262,3 +262,7 @@ if __name__ == "__main__":
         + f"Total time elapsed: {Fore.CYAN}{time.time() - time_s} s."
         + Style.RESET_ALL
     )
+
+
+if __name__ == "__main__":
+    entry()
