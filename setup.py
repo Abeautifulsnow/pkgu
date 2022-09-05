@@ -3,6 +3,7 @@ import sys
 from os.path import dirname, join, realpath
 from shutil import rmtree
 
+import toml
 from setuptools import Command, find_packages, setup
 
 # $ python setup.py upload
@@ -20,18 +21,25 @@ __modules__ = ["pipu", "-version"]
 
 # Load the package's _version.py module as a dictionary.
 PROJECT_ROOT = dirname(realpath(__file__))
-about = {}
-with open(join(PROJECT_ROOT, "_version.py")) as f:
-    exec(f.read(), about)
-
 
 with open(join(PROJECT_ROOT, "README.md"), "r") as md_read:
     __long_description__ = md_read.read()
 
-with open(join(PROJECT_ROOT, "requirements.txt"), "r") as f:
-    __install_reqs__ = f.read().splitlines()
+# generate the dependency data
+with open(join(PROJECT_ROOT, "pyproject.toml"), "r") as f_read:
+    content = toml.load(f_read)
+    dependencies = content["tool"]["poetry"]["dependencies"]
+    dev_dependencies = content["tool"]["poetry"]["dev-dependencies"]
+    __authors__ = content["tool"]["poetry"]["authors"][0]
+    __version__ = content["tool"]["poetry"]["version"]
 
-__version__ = about["__version__"]
+dependencies.update(**dev_dependencies)
+__install_reqs__ = []
+for dep, version in dependencies.items():
+    if version.startswith("^"):
+        version = version.split("^")[1]
+
+    __install_reqs__.append(f"{dep}>={version}")
 
 
 class UploadCommand(Command):
@@ -76,7 +84,7 @@ setup(
     version=__version__,
     description=__description__,
     url=__url__,
-    author=about["__author__"],
+    author=__authors__,
     author_email=__author_email__,
     license=__license__,
     packages=find_packages(exclude=("test",)),
