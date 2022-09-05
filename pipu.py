@@ -5,6 +5,7 @@ import os
 import pathlib
 import signal
 import subprocess
+import sys
 import time
 import traceback
 from functools import lru_cache
@@ -23,9 +24,6 @@ ENV["PYTHONUNBUFFERED"] = "1"
 
 # 初始化
 loggerIns = logger
-init()
-spinner = Halo(spinner="bouncingBall", interval=100, text_color="cyan")
-spinner.text = "checking for updates..."
 
 
 def import_module(module_name: str) -> None:
@@ -107,9 +105,10 @@ class AllPackagesExpiredBaseModel(BaseModel):
 
 class WriteDataToModel(PrettyTable):
     command = "pip list --outdated --format=json"
-    spinner.start()
 
-    def __init__(self):
+    def __init__(self, spinner: 'Halo'):
+        self.spinner = spinner
+        self.spinner.start()
         super().__init__(
             field_names=["Name", "Version", "Latest Version", "Latest FileType"],
             border=True,
@@ -142,7 +141,7 @@ class WriteDataToModel(PrettyTable):
 
     def pretty_table(self):
         if self.model:
-            spinner.stop()
+            self.spinner.stop()
             self.packages = self._get_packages()
             self.add_rows(self.packages)
 
@@ -157,7 +156,7 @@ class WriteDataToModel(PrettyTable):
     def _upgrade_packages(self):
         for package_list in self.packages:
             package = package_list
-            install_res = upgrade_expired_package(package[0], package[1], package[2])
+            install_res = upgrade_expired_package(package[0], package[1], package[2], self.spinner)
 
             if install_res[0]:
                 self.success_install.append(install_res[1])
@@ -169,14 +168,14 @@ class WriteDataToModel(PrettyTable):
 
     def _statistic_result(self):
         print("-" * 60)
-        spinner.start()
-        spinner.text_color = "green"
-        spinner.succeed(
+        self.spinner.start()
+        self.spinner.text_color = "green"
+        self.spinner.succeed(
             "Successfully installed {} packages. 「{}」".format(
                 len(self.success_install), ", ".join(self.success_install)
             )
         )
-        spinner.fail(
+        self.spinner.fail(
             "Unsuccessfully installed {} packages. 「{}」".format(
                 len(self.fail_install), ", ".join(self.fail_install)
             )
@@ -194,7 +193,7 @@ class WriteDataToModel(PrettyTable):
         self.statistic_result()
 
 
-def upgrade_expired_package(package_name: str, old_version: str, latest_version: str):
+def upgrade_expired_package(package_name: str, old_version: str, latest_version: str, spinner: 'Halo'):
     update_cmd = "pip install --upgrade " + f"{package_name}=={latest_version}"
     spinner.spinner = "dots"
     spinner.text_color = ""
@@ -210,17 +209,17 @@ def upgrade_expired_package(package_name: str, old_version: str, latest_version:
         return update_res_bool, package_name
     else:
         spinner.text_color = "red"
-        spinner.fail(installing_msg("installed failed"))
+        spinner.fail(installing_msg("installation failed"))
         return update_res_bool, package_name
 
 
-async def run_async(class_name: "WriteDataToModel"):
+async def run_async(class_name: "WriteDataToModel", spinner: 'Halo'):
     expired_packages = class_name.packages
     loop = asyncio.get_event_loop()
 
     cmd_s = [
         loop.run_in_executor(
-            None, upgrade_expired_package, *(package[0], package[1], package[2])
+            None, upgrade_expired_package, *(package[0], package[1], package[2], spinner)
         )
         for package in expired_packages
     ]
@@ -249,11 +248,14 @@ def entry():
     args = parse.parse_args()
 
     time_s = time.time()
-    wdt = WriteDataToModel()
+
+    spinner = Halo(spinner="bouncingBall", interval=100, text_color="cyan")
+    spinner.text = "checking for updates..."
+    wdt = WriteDataToModel(spinner)
     wdt.pretty_table()
 
     if args.async_upgrade:
-        asyncio.run(run_async(wdt))
+        asyncio.run(run_async(wdt, spinner))
     else:
         wdt()
 
@@ -265,4 +267,5 @@ def entry():
 
 
 if __name__ == "__main__":
+    init()
     entry()
