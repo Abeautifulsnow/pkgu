@@ -5,7 +5,6 @@ import os
 import pathlib
 import signal
 import subprocess
-import sys
 import time
 import traceback
 from functools import lru_cache
@@ -17,6 +16,7 @@ from halo import Halo
 from loguru import logger
 from prettytable import PrettyTable
 from pydantic import BaseModel
+from simple_term_menu import TerminalMenu
 
 # 变量赋值
 ENV = os.environ.copy()
@@ -106,7 +106,7 @@ class AllPackagesExpiredBaseModel(BaseModel):
 class WriteDataToModel(PrettyTable):
     command = "pip list --outdated --format=json"
 
-    def __init__(self, spinner: 'Halo'):
+    def __init__(self, spinner: "Halo"):
         self.spinner = spinner
         self.spinner.start()
         super().__init__(
@@ -156,7 +156,9 @@ class WriteDataToModel(PrettyTable):
     def _upgrade_packages(self):
         for package_list in self.packages:
             package = package_list
-            install_res = upgrade_expired_package(package[0], package[1], package[2], self.spinner)
+            install_res = upgrade_expired_package(
+                package[0], package[1], package[2], self.spinner
+            )
 
             if install_res[0]:
                 self.success_install.append(install_res[1])
@@ -188,12 +190,27 @@ class WriteDataToModel(PrettyTable):
         if packages:
             cb_func()
 
+    # 更新包到最新版本
     def __call__(self, *args, **kwargs):
         self.upgrade_packages()
         self.statistic_result()
 
 
-def upgrade_expired_package(package_name: str, old_version: str, latest_version: str, spinner: 'Halo'):
+class UserOptions():
+    def __init__(self):
+        self.tm = TerminalMenu
+
+    def ifUpgradeModules(self) -> str:
+        title = "continue with the package update?"
+        options = ["yes", "no "]
+        terminal_menu = self.tm(options, title=title)
+        menu_entry_index = terminal_menu.show()
+        return options[menu_entry_index]
+
+
+def upgrade_expired_package(
+    package_name: str, old_version: str, latest_version: str, spinner: "Halo"
+):
     update_cmd = "pip install --upgrade " + f"{package_name}=={latest_version}"
     spinner.spinner = "dots"
     spinner.text_color = ""
@@ -213,13 +230,15 @@ def upgrade_expired_package(package_name: str, old_version: str, latest_version:
         return update_res_bool, package_name
 
 
-async def run_async(class_name: "WriteDataToModel", spinner: 'Halo'):
+async def run_async(class_name: "WriteDataToModel", spinner: "Halo"):
     expired_packages = class_name.packages
     loop = asyncio.get_event_loop()
 
     cmd_s = [
         loop.run_in_executor(
-            None, upgrade_expired_package, *(package[0], package[1], package[2], spinner)
+            None,
+            upgrade_expired_package,
+            *(package[0], package[1], package[2], spinner),
         )
         for package in expired_packages
     ]
@@ -254,10 +273,23 @@ def entry():
     wdt = WriteDataToModel(spinner)
     wdt.pretty_table()
 
-    if args.async_upgrade:
-        asyncio.run(run_async(wdt, spinner))
+    # TODO: 终端交互是否要执行更新操作
+    # - 是:
+    #   - 异步更新
+    #   - 同步更新
+    # - 否:
+    #   - 直接结束
+    uo = UserOptions()
+
+    flag = uo.ifUpgradeModules()
+
+    if flag == "yes":
+        if args.async_upgrade:
+            asyncio.run(run_async(wdt, spinner))
+        else:
+            wdt()
     else:
-        wdt()
+        ...
 
     print(
         Fore.MAGENTA

@@ -5,6 +5,7 @@ description = "Find the out-dated packages installed by the pip tool and update 
 authors = ["Abeautifulsnow"]
 
 [tool.poetry.dependencies]
+python = "^3.9"
 pydantic = "^1.9.2"
 orjson = "^3.7.11"
 prettytable = "^3.3.0"
@@ -12,6 +13,8 @@ loguru = "^0.6.0"
 colorama = "^0.4.5"
 halo = "^0.0.31"
 toml = "^0.10.2"
+py-retry = "^0.0.4"
+simple-term-menu = "^1.5.0"
 
 [tool.poetry.dev-dependencies]
 

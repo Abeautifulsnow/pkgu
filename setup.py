@@ -36,10 +36,13 @@ with open(join(PROJECT_ROOT, "pyproject.toml"), "r") as f_read:
 dependencies.update(**dev_dependencies)
 __install_reqs__ = []
 for dep, version in dependencies.items():
-    if version.startswith("^"):
-        version = version.split("^")[1]
+    if dep == 'python':
+        continue
+    else:
+        if version.startswith("^"):
+            version = version.split("^")[1]
 
-    __install_reqs__.append(f"{dep}>={version}")
+        __install_reqs__.append(f"{dep}>={version}")
 
 
 class UploadCommand(Command):
