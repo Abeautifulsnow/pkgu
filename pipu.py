@@ -106,14 +106,14 @@ class AllPackagesExpiredBaseModel(BaseModel):
 class WriteDataToModel(PrettyTable):
     command = "pip list --outdated --format=json"
 
-    def __init__(self, spinner: "Halo"):
+    def __init__(self, spinner: "Halo", py_env: str):
         self.spinner = spinner
         self.spinner.start()
         super().__init__(
             field_names=["Name", "Version", "Latest Version", "Latest FileType"],
             border=True,
         )
-        self.ori_data = run_subprocess_cmd(self.command)
+        self.ori_data = run_subprocess_cmd(f'{py_env} -m ' + self.command)
         self.model: Optional[AllPackagesExpiredBaseModel] = None
         self.to_model()
         self.packages: Optional[List[List[str]]] = None
@@ -209,7 +209,7 @@ class UserOptions():
 
 
 def upgrade_expired_package(
-    package_name: str, old_version: str, latest_version: str, spinner: "Halo"
+        package_name: str, old_version: str, latest_version: str, spinner: "Halo"
 ):
     update_cmd = "pip install --upgrade " + f"{package_name}=={latest_version}"
     spinner.spinner = "dots"
@@ -255,6 +255,16 @@ async def run_async(class_name: "WriteDataToModel", spinner: "Halo"):
     class_name.statistic_result()
 
 
+def get_python() -> Optional[str]:
+    cmd = "which python3"
+    py_path, res_bool = run_subprocess_cmd(cmd)
+
+    if res_bool:
+        return py_path
+    else:
+        return None
+
+
 def entry():
     parse = argparse.ArgumentParser(description="Upgrade python lib.")
     parse.add_argument(
@@ -270,7 +280,13 @@ def entry():
 
     spinner = Halo(spinner="bouncingBall", interval=100, text_color="cyan")
     spinner.text = "checking for updates..."
-    wdt = WriteDataToModel(spinner)
+
+    python_env = get_python()
+    if python_env is None:
+        loggerIns.error("The python3 environment is invalid.")
+        return None
+
+    wdt = WriteDataToModel(spinner, python_env)
     wdt.pretty_table()
 
     # TODO: 终端交互是否要执行更新操作
