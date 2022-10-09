@@ -17,7 +17,7 @@ poetry install
 and then, run `main.py` script.
 
 ```bash
-python3 pipu.py
+python3 pkgu.py
 ```
 
 - Use it through pip
@@ -26,7 +26,7 @@ python3 pipu.py
 pip3 install pkgu
 ```
 
-after the installation is complete, you can enter `pipu -h` command on your terminal to learn how to use it.
+after the installation is complete, you can enter `pkgu -h` command on your terminal to learn how to use it.
 
 ## ScreenShoot
 

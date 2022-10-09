@@ -12,12 +12,12 @@ __title__ = "pkgu"
 __description__ = (
     "Find the out-dated packages installed by the Pip tool and update them."
 )
-__url__ = "https://github.com/Abeautifulsnow/pipu"
+__url__ = "https://github.com/Abeautifulsnow/pkgu"
 __author_email__ = "lcprunstone@163.com"
 __license__ = "MIT"
 
-__keywords__ = ["python", "pip", "pip install pkg --upgrade", "pip-update"]
-__modules__ = ["pipu", "-version"]
+__keywords__ = ["python3", "pip", "pip install pkg --upgrade", "pip-update"]
+__modules__ = ["pkgu", "--version"]
 
 # Load the package's _version.py module as a dictionary.
 PROJECT_ROOT = dirname(realpath(__file__))
@@ -112,5 +112,5 @@ setup(
         "Topic :: Software Development :: Libraries",
     ],
     cmdclass={"upload": UploadCommand},
-    entry_points={"console_scripts": ["pipu=pipu:entry"]},
+    entry_points={"console_scripts": ["pkgu=pkgu:entry"]},
 )

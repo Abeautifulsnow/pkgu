@@ -8,9 +8,11 @@ import subprocess
 import time
 import traceback
 from functools import lru_cache
+from os.path import dirname, realpath, join
 from typing import Union, AnyStr, List, Optional, Tuple, Callable
 
 import orjson
+import toml
 from colorama import init, Fore, Style
 from halo import Halo
 from loguru import logger
@@ -113,7 +115,7 @@ class WriteDataToModel(PrettyTable):
             field_names=["Name", "Version", "Latest Version", "Latest FileType"],
             border=True,
         )
-        self.ori_data = run_subprocess_cmd(f'{py_env} -m ' + self.command)
+        self.ori_data = run_subprocess_cmd(f"{py_env} -m " + self.command)
         self.model: Optional[AllPackagesExpiredBaseModel] = None
         self.to_model()
         self.packages: Optional[List[List[str]]] = None
@@ -196,7 +198,7 @@ class WriteDataToModel(PrettyTable):
         self.statistic_result()
 
 
-class UserOptions():
+class UserOptions:
     def __init__(self):
         self.tm = TerminalMenu
 
@@ -209,7 +211,7 @@ class UserOptions():
 
 
 def upgrade_expired_package(
-        package_name: str, old_version: str, latest_version: str, spinner: "Halo"
+    package_name: str, old_version: str, latest_version: str, spinner: "Halo"
 ):
     update_cmd = "pip install --upgrade " + f"{package_name}=={latest_version}"
     spinner.spinner = "dots"
@@ -260,18 +262,34 @@ def get_python() -> Optional[str]:
     py_path, res_bool = run_subprocess_cmd(cmd)
 
     if res_bool:
-        return py_path
+        return py_path.strip("\n")
     else:
         return None
 
 
+def get_pkgu_version() -> str:
+    PROJECT_ROOT = dirname(realpath(__file__))
+    with open(join(PROJECT_ROOT, "pyproject.toml"), "r") as yaml_r:
+        content = toml.load(yaml_r)
+        version = content["tool"]["poetry"]["version"]
+
+    return version
+
+
 def entry():
-    parse = argparse.ArgumentParser(description="Upgrade python lib.")
+    parse = argparse.ArgumentParser(description="Upgrade python lib.", prog="pkgu")
     parse.add_argument(
         "-a",
         "--async_upgrade",
         help="Update the library asynchronously.",
         action="store_true",
+    )
+    parse.add_argument(
+        "-v",
+        "--version",
+        help="Display pkgu version and information",
+        action="version",
+        version=f"%(prog)s {get_pkgu_version()}",
     )
 
     args = parse.parse_args()
