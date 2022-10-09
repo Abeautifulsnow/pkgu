@@ -267,14 +267,6 @@ def get_python() -> Optional[str]:
         return None
 
 
-def get_pkgu_version() -> str:
-    with open("pyproject.toml", "r") as yaml_r:
-        content = toml.load(yaml_r)
-        version = content["tool"]["poetry"]["version"]
-
-    return version
-
-
 def entry():
     parse = argparse.ArgumentParser(description="Upgrade python lib.", prog="pkgu")
     parse.add_argument(
@@ -288,7 +280,7 @@ def entry():
         "--version",
         help="Display pkgu version and information",
         action="version",
-        version=f"%(prog)s {get_pkgu_version()}",
+        version="%(prog)s 0.0.10",
     )
 
     args = parse.parse_args()
