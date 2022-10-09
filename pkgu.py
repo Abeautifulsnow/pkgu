@@ -268,8 +268,7 @@ def get_python() -> Optional[str]:
 
 
 def get_pkgu_version() -> str:
-    PROJECT_ROOT = dirname(realpath(__file__))
-    with open(join(PROJECT_ROOT, "pyproject.toml"), "r") as yaml_r:
+    with open("pyproject.toml", "r") as yaml_r:
         content = toml.load(yaml_r)
         version = content["tool"]["poetry"]["version"]
 
