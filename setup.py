@@ -38,6 +38,8 @@ __install_reqs__ = []
 for dep, version in dependencies.items():
     if dep == 'python':
         continue
+    elif isinstance(version, dict):
+        continue
     else:
         if version.startswith("^"):
             version = version.split("^")[1]
