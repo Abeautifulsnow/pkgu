@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pkgu"
-version = "0.0.10"
+version = "0.0.11"
 description = "Find the out-dated packages installed by the pip tool and update them."
 authors = ["Abeautifulsnow"]
 
@@ -15,6 +15,7 @@ halo = "^0.0.31"
 toml = "^0.10.2"
 py-retry = "^0.0.4"
 simple-term-menu = "^1.5.0"
+importlib-metadata = {version = "^1.0", python = "<3.8"}
 
 [tool.poetry.dev-dependencies]
 

@@ -8,11 +8,14 @@ import subprocess
 import time
 import traceback
 from functools import lru_cache
-from os.path import dirname, realpath, join
 from typing import Union, AnyStr, List, Optional, Tuple, Callable
 
+try:
+    import importlib.metadata as importlib_metadata
+except ModuleNotFoundError:
+    import importlib_metadata
+
 import orjson
-import toml
 from colorama import init, Fore, Style
 from halo import Halo
 from loguru import logger
@@ -23,6 +26,7 @@ from simple_term_menu import TerminalMenu
 # 变量赋值
 ENV = os.environ.copy()
 ENV["PYTHONUNBUFFERED"] = "1"
+VERSION = importlib_metadata.version("pkgu")
 
 # 初始化
 loggerIns = logger
@@ -211,7 +215,7 @@ class UserOptions:
 
 
 def upgrade_expired_package(
-    package_name: str, old_version: str, latest_version: str, spinner: "Halo"
+        package_name: str, old_version: str, latest_version: str, spinner: "Halo"
 ):
     update_cmd = "pip install --upgrade " + f"{package_name}=={latest_version}"
     spinner.spinner = "dots"
@@ -280,7 +284,7 @@ def entry():
         "--version",
         help="Display pkgu version and information",
         action="version",
-        version="%(prog)s 0.0.10",
+        version=f"%(prog)s {VERSION}",
     )
 
     args = parse.parse_args()
@@ -323,6 +327,9 @@ def entry():
     )
 
 
-if __name__ == "__main__":
+def main():
     init()
     entry()
+
+
+main()

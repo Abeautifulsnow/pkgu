@@ -14,7 +14,7 @@ if you don't have `poetry` tool, please install it first. 🔗: [poetry installa
 poetry install
 ```
 
-and then, run `main.py` script.
+and then, run `pkgu.py` script.
 
 ```bash
 python3 pkgu.py
