@@ -3,8 +3,10 @@ import asyncio
 import inspect
 import os
 import pathlib
+import shutil
 import signal
 import subprocess
+import sys
 import time
 import traceback
 from functools import lru_cache
@@ -215,7 +217,7 @@ class UserOptions:
 
 
 def upgrade_expired_package(
-        package_name: str, old_version: str, latest_version: str, spinner: "Halo"
+    package_name: str, old_version: str, latest_version: str, spinner: "Halo"
 ):
     update_cmd = "pip install --upgrade " + f"{package_name}=={latest_version}"
     spinner.spinner = "dots"
@@ -262,13 +264,17 @@ async def run_async(class_name: "WriteDataToModel", spinner: "Halo"):
 
 
 def get_python() -> Optional[str]:
-    cmd = "which python3"
-    py_path, res_bool = run_subprocess_cmd(cmd)
+    py_path = sys.executable
 
-    if res_bool:
-        return py_path.strip("\n")
+    if py_path is not None:
+        return py_path
     else:
-        return None
+        py_path = shutil.which("python3")
+
+        if py_path is not None:
+            return py_path
+        else:
+            return None
 
 
 def entry():
@@ -332,5 +338,5 @@ def main():
     entry()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
