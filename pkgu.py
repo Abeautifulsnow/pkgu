@@ -160,7 +160,6 @@ class WriteDataToModel(PrettyTable):
             awesome = Fore.GREEN + "✔ Awesome!" + Style.RESET_ALL
             print(f"{awesome} All of your dependencies are up-to-date.")
 
-    # TODO: 将罗列出的需要升级的包支持异步async更新
     def _upgrade_packages(self):
         for package_list in self.packages:
             package = package_list
@@ -185,11 +184,13 @@ class WriteDataToModel(PrettyTable):
                 len(self.success_install), ", ".join(self.success_install)
             )
         )
+        self.spinner.text_color = "red"
         self.spinner.fail(
             "Unsuccessfully installed {} packages. 「{}」".format(
                 len(self.fail_install), ", ".join(self.fail_install)
             )
         )
+        self.spinner.stop()
 
     def statistic_result(self):
         return self._has_packages(self.packages, self._statistic_result)
@@ -205,6 +206,10 @@ class WriteDataToModel(PrettyTable):
 
 
 class UserOptions:
+    """
+    用户选项类，自定义用户选项
+    """
+
     def __init__(self):
         self.tm = TerminalMenu
 
@@ -231,17 +236,19 @@ def upgrade_expired_package(
     if update_res_bool:
         spinner.text_color = "green"
         spinner.succeed(installing_msg("installed"))
-        return update_res_bool, package_name
     else:
         spinner.text_color = "red"
         spinner.fail(installing_msg("installation failed"))
-        return update_res_bool, package_name
+
+    spinner.stop()
+    return update_res_bool, package_name
 
 
 async def run_async(class_name: "WriteDataToModel", spinner: "Halo"):
     expired_packages = class_name.packages
     loop = asyncio.get_event_loop()
 
+    # TODO: 这个写法有问题，会报错（RuntimeError: threads can only be started once）
     cmd_s = [
         loop.run_in_executor(
             None,
@@ -277,6 +284,14 @@ def get_python() -> Optional[str]:
             return None
 
 
+def print_total_time_elapsed(start_time: float):
+    print(
+        Fore.MAGENTA
+        + f"Total time elapsed: {Fore.CYAN}{time.time() - start_time} s."
+        + Style.RESET_ALL
+    )
+
+
 def entry():
     parse = argparse.ArgumentParser(description="Upgrade python lib.", prog="pkgu")
     parse.add_argument(
@@ -288,7 +303,7 @@ def entry():
     parse.add_argument(
         "-v",
         "--version",
-        help="Display pkgu version and information",
+        help=f"Display %(prog)s version and information",
         action="version",
         version=f"%(prog)s {VERSION}",
     )
@@ -307,6 +322,12 @@ def entry():
 
     wdt = WriteDataToModel(spinner, python_env)
     wdt.pretty_table()
+    spinner.stop()
+
+    if len(wdt.model.packages) == 0:
+        # 打印耗时总时间
+        print_total_time_elapsed(time_s)
+        return ...
 
     # TODO: 终端交互是否要执行更新操作
     # - 是:
@@ -326,11 +347,8 @@ def entry():
     else:
         ...
 
-    print(
-        Fore.MAGENTA
-        + f"Total time elapsed: {Fore.CYAN}{time.time() - time_s} s."
-        + Style.RESET_ALL
-    )
+    # 打印耗时总时间
+    print_total_time_elapsed(time_s)
 
 
 def main():
