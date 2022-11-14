@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pkgu"
-version = "0.0.13"
+version = "0.0.14"
 description = "Find the out-dated packages installed by the pip tool and update them."
 authors = ["Abeautifulsnow"]
 
