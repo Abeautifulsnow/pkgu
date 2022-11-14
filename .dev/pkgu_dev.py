@@ -9,7 +9,6 @@ import subprocess
 import sys
 import time
 import traceback
-from functools import lru_cache
 from typing import Union, AnyStr, List, Optional, Tuple, Callable
 
 try:
@@ -26,8 +25,6 @@ from pydantic import BaseModel
 from simple_term_menu import TerminalMenu
 
 # 变量赋值
-ENV = os.environ.copy()
-ENV["PYTHONUNBUFFERED"] = "1"
 VERSION = importlib_metadata.version("pkgu")
 
 # 初始化
@@ -54,7 +51,7 @@ def import_module(module_name: str) -> None:
             os.kill(os.getpid(), signal.SIGABRT)
 
 
-def run_subprocess_cmd(commands: Union[str, list]) -> Tuple[str, bool]:
+async def run_subprocess_cmd(commands: Union[str, list]) -> Tuple[str, bool]:
     src_file_name = pathlib.Path(inspect.getfile(inspect.currentframe())).name
     cmd_str = ""
 
@@ -68,17 +65,14 @@ def run_subprocess_cmd(commands: Union[str, list]) -> Tuple[str, bool]:
 
             cmd_str = " ".join(commands)
 
-    complete_result = subprocess.Popen(
+    complete_result = await asyncio.subprocess.create_subprocess_shell(
         cmd_str,
-        shell=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        env=ENV,
-        start_new_session=True,
     )
 
     try:
-        stdout, stderr = complete_result.communicate()
+        stdout, stderr = await complete_result.communicate()
 
         if complete_result.returncode == 0:
             return stdout.decode("utf-8"), True
@@ -94,7 +88,7 @@ def run_subprocess_cmd(commands: Union[str, list]) -> Tuple[str, bool]:
         loggerIns.error(f"[{src_file_name}] exception in {func_name}")
         complete_result.kill()
 
-        while complete_result.poll() is None:
+        while await complete_result.wait():
             loggerIns.info(f"[{src_file_name}] is waiting the child exit.")
 
         exit(1)
@@ -121,20 +115,22 @@ class WriteDataToModel(PrettyTable):
             field_names=["Name", "Version", "Latest Version", "Latest FileType"],
             border=True,
         )
-        self.ori_data = run_subprocess_cmd(f"{py_env} -m " + self.command)
+        self.ori_data = ""
+        self.py_env = py_env
         self.model: Optional[AllPackagesExpiredBaseModel] = None
-        self.to_model()
         self.packages: Optional[List[List[str]]] = None
         self.success_install: List[str] = []
         self.fail_install: List[str] = []
 
-    def data_to_json(self):
+    async def data_to_json(self):
+        self.ori_data = await run_subprocess_cmd(f"{self.py_env} -m " + self.command)
         return orjson.loads(self.ori_data[0])
 
-    @lru_cache(maxsize=1024)
-    def to_model(self):
-        json = self.data_to_json()
+    async def to_model(self):
+        json = await self.data_to_json()
         self.model = AllPackagesExpiredBaseModel(packages=[*json])
+
+        return self.model
 
     def _get_packages(self):
         return [
@@ -147,23 +143,24 @@ class WriteDataToModel(PrettyTable):
             for package_info in self.model.packages
         ]
 
-    def pretty_table(self):
+    async def pretty_table(self):
+        self.model = await self.to_model()
         if self.model:
             self.spinner.stop()
             self.packages = self._get_packages()
             self.add_rows(self.packages)
 
-        pretty_output = self.get_string()
-        if len(self.model.packages) != 0:
-            print(pretty_output)
-        else:
-            awesome = Fore.GREEN + "✔ Awesome!" + Style.RESET_ALL
-            print(f"{awesome} All of your dependencies are up-to-date.")
+            pretty_output = self.get_string()
+            if len(self.model.packages) != 0:
+                print(pretty_output)
+            else:
+                awesome = Fore.GREEN + "✔ Awesome!" + Style.RESET_ALL
+                print(f"{awesome} All of your dependencies are up-to-date.")
 
-    def _upgrade_packages(self):
+    async def _upgrade_packages(self):
         for package_list in self.packages:
             package = package_list
-            install_res = upgrade_expired_package(
+            install_res = await upgrade_expired_package(
                 package[0], package[1], package[2]
             )
 
@@ -172,8 +169,8 @@ class WriteDataToModel(PrettyTable):
             else:
                 self.fail_install.append(install_res[1])
 
-    def upgrade_packages(self):
-        return self._has_packages(self.packages, self._upgrade_packages)
+    async def upgrade_packages(self):
+        return await self._has_packages(self.packages, self._upgrade_packages)
 
     def _statistic_result(self):
         print("-" * 60)
@@ -192,17 +189,21 @@ class WriteDataToModel(PrettyTable):
         )
         self.spinner.stop()
 
-    def statistic_result(self):
-        return self._has_packages(self.packages, self._statistic_result)
+    async def statistic_result(self):
+        return await self._has_packages(self.packages, self._statistic_result)
 
-    def _has_packages(self, /, packages: Optional[List[List[str]]], cb_func: Callable):
+    @staticmethod
+    async def _has_packages(packages: Optional[List[List[str]]], cb_func: Callable):
         if packages:
-            cb_func()
+            if inspect.iscoroutinefunction(cb_func):
+                await cb_func()
+            else:
+                cb_func()
 
     # 更新包到最新版本
-    def __call__(self, *args, **kwargs):
-        self.upgrade_packages()
-        self.statistic_result()
+    async def __call__(self, *args, **kwargs):
+        await self.upgrade_packages()
+        await self.statistic_result()
 
 
 class UserOptions:
@@ -221,7 +222,9 @@ class UserOptions:
         return options[menu_entry_index]
 
 
-def upgrade_expired_package(package_name: str, old_version: str, latest_version: str):
+async def upgrade_expired_package(
+    package_name: str, old_version: str, latest_version: str
+):
     installing_msg = (
         lambda verb: f"{verb} {package_name}, version: from {old_version} to {latest_version}..."
     )
@@ -231,7 +234,7 @@ def upgrade_expired_package(package_name: str, old_version: str, latest_version:
         spinner="dots",
     ) as spinner:
         update_cmd = "pip install --upgrade " + f"{package_name}=={latest_version}"
-        update_res, update_res_bool = run_subprocess_cmd(update_cmd)
+        update_res, update_res_bool = await run_subprocess_cmd(update_cmd)
 
         if update_res_bool:
             spinner.text_color = "green"
@@ -245,19 +248,22 @@ def upgrade_expired_package(package_name: str, old_version: str, latest_version:
 
 async def run_async(class_name: "WriteDataToModel"):
     expired_packages = class_name.packages
-    loop = asyncio.get_event_loop()
 
     # TODO: 这个写法有问题，会报错（RuntimeError: threads can only be started once）
-    cmd_s = [
-        loop.run_in_executor(
-            None,
-            upgrade_expired_package,
-            *(package[0], package[1], package[2]),
-        )
-        for package in expired_packages
-    ]
-
-    res_list = await asyncio.gather(*cmd_s)
+    # cmd_s = [
+    #     loop.run_in_executor(
+    #         None,
+    #         upgrade_expired_package,
+    #         *(package[0], package[1], package[2]),
+    #     )
+    #     for package in expired_packages
+    # ]
+    res_list = await asyncio.gather(
+        *[
+            upgrade_expired_package(package[0], package[1], package[2])
+            for package in expired_packages
+        ]
+    )
 
     for result in res_list:
         res_bool, pak_name = result
@@ -266,7 +272,7 @@ async def run_async(class_name: "WriteDataToModel"):
         else:
             class_name.fail_install.append(pak_name)
 
-    class_name.statistic_result()
+    await class_name.statistic_result()
 
 
 def get_python() -> Optional[str]:
@@ -291,7 +297,7 @@ def print_total_time_elapsed(start_time: float):
     )
 
 
-def entry():
+async def entry():
     parse = argparse.ArgumentParser(description="Upgrade python lib.", prog="pkgu")
     parse.add_argument(
         "-a",
@@ -323,7 +329,7 @@ def entry():
             return None
 
         wdt = WriteDataToModel(spinner, python_env)
-        wdt.pretty_table()
+        await wdt.pretty_table()
 
     if len(wdt.model.packages) == 0:
         # 打印耗时总时间
@@ -342,9 +348,9 @@ def entry():
 
     if flag == "yes":
         if args.async_upgrade:
-            asyncio.run(run_async(wdt))
+            await run_async(wdt)
         else:
-            wdt()
+            await wdt()
     else:
         ...
 
@@ -352,10 +358,10 @@ def entry():
     print_total_time_elapsed(time_s)
 
 
-def main():
+async def main():
     init()
-    entry()
+    await entry()
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
