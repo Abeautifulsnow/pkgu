@@ -10,7 +10,7 @@ import sys
 import time
 import traceback
 from functools import lru_cache
-from typing import Union, AnyStr, List, Optional, Tuple, Callable
+from typing import AnyStr, Callable, List, Optional, Tuple, Union
 
 try:
     import importlib.metadata as importlib_metadata
@@ -18,7 +18,7 @@ except ModuleNotFoundError:
     import importlib_metadata
 
 import orjson
-from colorama import init, Fore, Style
+from colorama import Fore, Style, init
 from halo import Halo
 from loguru import logger
 from prettytable import PrettyTable
@@ -163,9 +163,7 @@ class WriteDataToModel(PrettyTable):
     def _upgrade_packages(self):
         for package_list in self.packages:
             package = package_list
-            install_res = upgrade_expired_package(
-                package[0], package[1], package[2]
-            )
+            install_res = upgrade_expired_package(package[0], package[1], package[2])
 
             if install_res[0]:
                 self.success_install.append(install_res[1])
@@ -330,12 +328,6 @@ def entry():
         print_total_time_elapsed(time_s)
         return ...
 
-    # TODO: 终端交互是否要执行更新操作
-    # - 是:
-    #   - 异步更新
-    #   - 同步更新
-    # - 否:
-    #   - 直接结束
     uo = UserOptions()
 
     flag = uo.ifUpgradeModules()
