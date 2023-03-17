@@ -1,6 +1,6 @@
 # pkgu
 
-Find the out-dated packages installed by the Pip tool and update them.
+Find the out-dated packages installed by the Pip tool and update them. Inspired by 👉[depu](https://github.com/kevwan/depu)
 
 ## Usage
 
