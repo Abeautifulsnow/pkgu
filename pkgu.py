@@ -220,9 +220,10 @@ class UserOptions:
 
 
 def upgrade_expired_package(package_name: str, old_version: str, latest_version: str):
-    installing_msg = (
-        lambda verb: f"{verb} {package_name}, version: from {old_version} to {latest_version}..."
-    )
+    def installing_msg(verb):
+        return (
+            f"{verb} {package_name}, version: from {old_version} to {latest_version}..."
+        )
 
     with Halo(
         text=installing_msg("installing"),
@@ -300,7 +301,7 @@ def entry():
     parse.add_argument(
         "-v",
         "--version",
-        help=f"Display %(prog)s version and information",
+        help="Display %(prog)s version and information",
         action="version",
         version=f"%(prog)s {VERSION}",
     )

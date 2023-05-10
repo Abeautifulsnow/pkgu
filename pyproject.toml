@@ -1,8 +1,8 @@
 [tool.poetry]
 name = "pkgu"
-version = "0.0.16"
+version = "0.0.17"
 description = "Find the out-dated packages installed by the pip tool and update them."
-authors = ["Abeautifulsnow"]
+authors = ["Abeautifulsnow <lnrunstone.0727@gmail.com>"]
 
 [tool.poetry.dependencies]
 python = "^3.9"
