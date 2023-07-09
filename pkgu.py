@@ -41,7 +41,7 @@ def import_module(module_name: str) -> None:
         subprocess.call(["python3", "-m", "pip", "install", "-U", "pip"])
 
         run_result = subprocess.run(
-            ["python3", "-m", "pip", "install", f"{module_name}"],
+            ["python3", "-m", "pip", "install", f"{module_name}", "--no-cache"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
