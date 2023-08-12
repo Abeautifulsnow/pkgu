@@ -2,7 +2,7 @@
 name: Feature
 about: Create a report to help us improve
 title: '[Feature]:'
-labels: enhancement
+labels: kind/feature
 assignees: Abeautifulsnow
 
 ---
