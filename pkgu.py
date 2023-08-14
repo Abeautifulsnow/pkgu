@@ -10,7 +10,7 @@ import sys
 import time
 import traceback
 from functools import lru_cache
-from typing import AnyStr, Callable, List, Optional, Tuple, Union
+from typing import AnyStr, Callable, List, NewType, Optional, Tuple, Union
 
 try:
     import importlib.metadata as importlib_metadata
@@ -32,6 +32,12 @@ VERSION = importlib_metadata.version("pkgu")
 
 # 初始化
 loggerIns = logger
+
+# typing
+T_NAME = NewType("T_NAME", str)
+T_VERSION = NewType("T_VERSION", str)
+T_LATEST_VERSION = NewType("T_LATEST_VERSION", str)
+T_LATEST_FILETYPE = NewType("T_LATEST_FILETYPE", str)
 
 
 def import_module(module_name: str) -> None:
@@ -55,6 +61,15 @@ def import_module(module_name: str) -> None:
 
 
 def run_subprocess_cmd(commands: Union[str, list]) -> Tuple[str, bool]:
+    """Run shell command in Popen instance.
+
+    Args:
+        commands (Union[str, list]): The commands can be string or list.
+
+    Returns:
+        Tuple[str, bool]: If the command is executed successfully,
+        then return stdout and True, otherwise return stderr and False.
+    """
     src_file_name = pathlib.Path(inspect.getfile(inspect.currentframe())).name
     cmd_str = ""
 
@@ -64,7 +79,7 @@ def run_subprocess_cmd(commands: Union[str, list]) -> Tuple[str, bool]:
         for element in commands:
             if isinstance(element, list):
                 loggerIns.error("Error: the element in Commands must be string type.")
-                exit(1)
+                sys.exit(1)
 
             cmd_str = " ".join(commands)
 
@@ -95,12 +110,14 @@ def run_subprocess_cmd(commands: Union[str, list]) -> Tuple[str, bool]:
         complete_result.kill()
 
         while complete_result.poll() is None:
-            loggerIns.info(f"[{src_file_name}] is waiting the child exit.")
+            loggerIns.info(f"[{src_file_name}] is waiting the child sys.exit.")
 
-        exit(1)
+        sys.exit(1)
 
 
 class PackageInfoBase(BaseModel):
+    """The basic package infomation."""
+
     name: AnyStr
     version: AnyStr
     latest_version: AnyStr
@@ -108,6 +125,8 @@ class PackageInfoBase(BaseModel):
 
 
 class AllPackagesExpiredBaseModel(BaseModel):
+    """The list of packages."""
+
     packages: List[PackageInfoBase]
 
 
@@ -124,7 +143,9 @@ class WriteDataToModel(PrettyTable):
         self.ori_data = run_subprocess_cmd(f"{py_env} -m " + self.command)
         self.model: Optional[AllPackagesExpiredBaseModel] = None
         self.to_model()
-        self.packages: Optional[List[List[str]]] = None
+        self.packages: Optional[
+            List[Tuple[T_NAME, T_VERSION, T_LATEST_VERSION, T_LATEST_FILETYPE]]
+        ] = None
         self.success_install: List[str] = []
         self.fail_install: List[str] = []
 
@@ -136,14 +157,16 @@ class WriteDataToModel(PrettyTable):
         json = self.data_to_json()
         self.model = AllPackagesExpiredBaseModel(packages=[*json])
 
-    def _get_packages(self):
+    def _get_packages(
+        self,
+    ) -> List[Tuple[T_NAME, T_VERSION, T_LATEST_VERSION, T_LATEST_FILETYPE]]:
         return [
-            [
+            (
                 package_info.name.decode(),
                 package_info.version.decode(),
                 package_info.latest_version.decode(),
                 package_info.latest_filetype.decode(),
-            ]
+            )
             for package_info in self.model.packages
         ]
 
@@ -160,8 +183,17 @@ class WriteDataToModel(PrettyTable):
             awesome = Fore.GREEN + "✔ Awesome!" + Style.RESET_ALL
             print(f"{awesome} All of your dependencies are up-to-date.")
 
-    def _upgrade_packages(self):
-        for package_list in self.packages:
+    def _upgrade_packages(
+        self,
+        packages: List[Tuple[T_NAME, T_VERSION, T_LATEST_VERSION, T_LATEST_FILETYPE]],
+    ):
+        """Upgrade packages with synchronous way.
+
+        Args:
+            packages:
+                (List[Tuple[T_NAME, T_VERSION, T_LATEST_VERSION, T_LATEST_FILETYPE]])
+        """
+        for package_list in packages:
             package = package_list
             install_res = upgrade_expired_package(package[0], package[1], package[2])
 
@@ -191,11 +223,11 @@ class WriteDataToModel(PrettyTable):
         self.spinner.stop()
 
     def statistic_result(self):
-        return self._has_packages(self.packages, self._statistic_result)
+        return self._has_packages(None, self._statistic_result)
 
     def _has_packages(self, /, packages: Optional[List[List[str]]], cb_func: Callable):
         if packages:
-            cb_func()
+            cb_func(packages)
 
     # 更新包到最新版本
     def __call__(self, *args, **kwargs):
@@ -218,8 +250,30 @@ class UserOptions:
         menu_entry_index = terminal_menu.show()
         return options[menu_entry_index]
 
+    def updateOneOfPackages(
+        self,
+        packages: List[Tuple[T_NAME, T_VERSION, T_LATEST_VERSION, T_LATEST_FILETYPE]],
+        # upgrade_func: Callable[[str, str, str], None],
+    ):
+        title = "Select one of these packages to update"
+        options = [package[0] for package in packages]
 
-def upgrade_expired_package(package_name: str, old_version: str, latest_version: str):
+        terminal_package_option = self.tm(
+            options,
+            title=title,
+            multi_select=True,
+            show_multi_select_hint=True,
+            show_search_hint=True,
+        )
+        menu_entry_index = terminal_package_option.show()
+
+        # package_name = options[menu_entry_index]
+        print(menu_entry_index)
+
+
+def upgrade_expired_package(
+    package_name: T_NAME, old_version: T_VERSION, latest_version: T_LATEST_VERSION
+) -> Tuple[bool, T_NAME]:
     def installing_msg(verb):
         return (
             f"{verb} {package_name}, version: from {old_version} to {latest_version}..."
@@ -230,7 +284,7 @@ def upgrade_expired_package(package_name: str, old_version: str, latest_version:
         spinner="dots",
     ) as spinner:
         update_cmd = "pip install --upgrade " + f"{package_name}=={latest_version}"
-        update_res, update_res_bool = run_subprocess_cmd(update_cmd)
+        _, update_res_bool = run_subprocess_cmd(update_cmd)
 
         if update_res_bool:
             spinner.text_color = "green"
@@ -269,6 +323,7 @@ async def run_async(class_name: "WriteDataToModel"):
 
 
 def get_python() -> Optional[str]:
+    """Return the path of executable python"""
     py_path = sys.executable
 
     if py_path is not None:
@@ -282,11 +337,16 @@ def get_python() -> Optional[str]:
             return None
 
 
-def print_total_time_elapsed(start_time: float):
+def print_total_time_elapsed(start_time: float, time_end: Optional[float]):
+    elapsed: str
+
+    if time_end:
+        elapsed = time_end - start_time
+    else:
+        elapsed = time.time() - start_time
+
     print(
-        Fore.MAGENTA
-        + f"Total time elapsed: {Fore.CYAN}{time.time() - start_time} s."
-        + Style.RESET_ALL
+        Fore.MAGENTA + f"Total time elapsed: {Fore.CYAN}{elapsed} s." + Style.RESET_ALL
     )
 
 
@@ -309,6 +369,7 @@ def entry():
     args = parse.parse_args()
 
     time_s = time.time()
+    time_e = 0
 
     with Halo(
         spinner="bouncingBall",
@@ -324,6 +385,9 @@ def entry():
         wdt = WriteDataToModel(spinner, python_env)
         wdt.pretty_table()
 
+        # Get the current time stamp.
+        time_e = time.time()
+
     if len(wdt.model.packages) == 0:
         # 打印耗时总时间
         print_total_time_elapsed(time_s)
@@ -335,14 +399,15 @@ def entry():
 
     if flag == "yes":
         if args.async_upgrade:
-            asyncio.run(run_async(wdt))
+            # asyncio.run(run_async(wdt))
+            uo.updateOneOfPackages(wdt.packages)
         else:
             wdt()
     else:
         ...
 
     # 打印耗时总时间
-    print_total_time_elapsed(time_s)
+    print_total_time_elapsed(time_s, time_e)
 
 
 def main():
