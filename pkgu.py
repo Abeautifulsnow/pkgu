@@ -243,20 +243,28 @@ class UserOptions:
     def __init__(self):
         self.tm = TerminalMenu
 
-    def ifUpgradeModules(self) -> str:
-        title = "continue with the package update?"
-        options = ["yes", "no "]
+    def _base_option_single(self, title: str, options: List[str]) -> str:
         terminal_menu = self.tm(options, title=title)
         menu_entry_index = terminal_menu.show()
         return options[menu_entry_index]
+
+    def ifUpgradeModules(self) -> str:
+        title = "continue with the package update?"
+        options = ["yes", "no"]
+        return self._base_option_single(title, options)
+
+    def ifUpdateAllModules(self) -> str:
+        title = "Update all packages listed above or portion of them?"
+        options = ["all", "portion"]
+        return self._base_option_single(title, options)
 
     def updateOneOfPackages(
         self,
         packages: List[Tuple[T_NAME, T_VERSION, T_LATEST_VERSION, T_LATEST_FILETYPE]],
         # upgrade_func: Callable[[str, str, str], None],
-    ):
+    ) -> Optional[Tuple[str]]:
         title = "Select one of these packages to update"
-        options = [package[0] for package in packages]
+        options = [f"{package[0]}@{package[1]}=>{package[2]}" for package in packages]
 
         terminal_package_option = self.tm(
             options,
@@ -265,10 +273,21 @@ class UserOptions:
             show_multi_select_hint=True,
             show_search_hint=True,
         )
-        menu_entry_index = terminal_package_option.show()
 
-        # package_name = options[menu_entry_index]
-        print(menu_entry_index)
+        terminal_package_option.show()
+        return terminal_package_option.chosen_menu_entries
+
+
+def extract_substrings_with_split(s):
+    # Split the string at the '@' and '=>' symbols
+    parts = s.split("@")
+    package_name = parts[0].strip()
+
+    versions = parts[1].split("=>")
+    version1 = versions[0].strip()
+    version2 = versions[1].strip()
+
+    return package_name, version1, version2
 
 
 def upgrade_expired_package(
@@ -296,8 +315,12 @@ def upgrade_expired_package(
     return update_res_bool, package_name
 
 
-async def run_async(class_name: "WriteDataToModel"):
-    expired_packages = class_name.packages
+async def run_async(
+    class_name: "WriteDataToModel", expired_packages: Optional[List] = None
+):
+    if not expired_packages:
+        expired_packages = class_name.packages
+
     loop = asyncio.get_event_loop()
 
     # TODO: 这个写法有问题，会报错（RuntimeError: threads can only be started once）
@@ -350,7 +373,7 @@ def print_total_time_elapsed(start_time: float, time_end: Optional[float]):
     )
 
 
-def entry():
+def parse_args():
     parse = argparse.ArgumentParser(description="Upgrade python lib.", prog="pkgu")
     parse.add_argument(
         "-a",
@@ -366,7 +389,11 @@ def entry():
         version=f"%(prog)s {VERSION}",
     )
 
-    args = parse.parse_args()
+    return parse.parse_args()
+
+
+def entry():
+    args = parse_args()
 
     time_s = time.time()
     time_e = 0
@@ -385,34 +412,55 @@ def entry():
         wdt = WriteDataToModel(spinner, python_env)
         wdt.pretty_table()
 
-        # Get the current time stamp.
-        time_e = time.time()
-
     if len(wdt.model.packages) == 0:
         # 打印耗时总时间
         print_total_time_elapsed(time_s)
         return ...
-
-    uo = UserOptions()
-
-    flag = uo.ifUpgradeModules()
-
-    if flag == "yes":
-        if args.async_upgrade:
-            # asyncio.run(run_async(wdt))
-            uo.updateOneOfPackages(wdt.packages)
-        else:
-            wdt()
     else:
-        ...
+        # Get the current time stamp.
+        time_e = time.time()
 
-    # 打印耗时总时间
-    print_total_time_elapsed(time_s, time_e)
+        uo = UserOptions()
+
+        flag = uo.ifUpgradeModules()
+
+        if flag == "yes":
+            all_or_portion = uo.ifUpdateAllModules()
+            match all_or_portion:
+                case "all":
+                    if args.async_upgrade:
+                        asyncio.run(run_async(wdt))
+                        # Get the current time stamp.
+                        time_e = time.time()
+                    else:
+                        wdt()
+                case "portion":
+                    select_menus = uo.updateOneOfPackages(wdt.packages)
+                    if select_menus:
+                        select_menus_update = [
+                            extract_substrings_with_split(package_str)
+                            for package_str in select_menus
+                        ]
+
+                        if args.async_upgrade:
+                            asyncio.run(run_async(wdt, select_menus_update))
+                            # Get the current time stamp.
+                            time_e = time.time()
+                        else:
+                            wdt._has_packages(
+                                select_menus_update, wdt._upgrade_packages
+                            )
+                            wdt.statistic_result()
+        # 打印耗时总时间
+        print_total_time_elapsed(time_s, time_e)
 
 
 def main():
-    init()
-    entry()
+    try:
+        init()
+        entry()
+    except KeyboardInterrupt:
+        loggerIns.warning("Exit...")
 
 
 if __name__ == "__main__":
