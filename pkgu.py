@@ -28,7 +28,7 @@ from simple_term_menu import TerminalMenu
 # 变量赋值
 ENV = os.environ.copy()
 ENV["PYTHONUNBUFFERED"] = "1"
-# VERSION = importlib_metadata.version("pkgu")
+__version__ = importlib_metadata.version("pkgu")
 
 # 初始化
 loggerIns = logger
@@ -429,13 +429,13 @@ def parse_args():
         help="Update the library asynchronously.",
         action="store_true",
     )
-    # parse.add_argument(
-    #     "-v",
-    #     "--version",
-    #     help="Display %(prog)s version and information",
-    #     action="version",
-    #     version=f"%(prog)s {VERSION}",
-    # )
+    parse.add_argument(
+        "-v",
+        "--version",
+        help="Display %(prog)s version and information",
+        action="version",
+        version=f"%(prog)s {__version__}",
+    )
 
     return parse.parse_args()
 
