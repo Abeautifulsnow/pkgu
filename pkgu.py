@@ -362,7 +362,7 @@ def get_python() -> Optional[str]:
             return None
 
 
-def print_total_time_elapsed(start_time: float, time_end: Optional[float]):
+def print_total_time_elapsed(start_time: float, time_end: Optional[float] = None):
     elapsed: str
 
     if time_end:
@@ -395,6 +395,7 @@ def parse_args():
 
 
 def entry():
+    """Main entrance."""
     args = parse_args()
 
     time_s = time.time()
@@ -417,7 +418,7 @@ def entry():
     if len(wdt.model.packages) == 0:
         # 打印耗时总时间
         print_total_time_elapsed(time_s)
-        return ...
+        return
     else:
         # Get the current time stamp.
         time_e = time.time()
@@ -453,6 +454,7 @@ def entry():
                                 select_menus_update, wdt._upgrade_packages
                             )
                             wdt.statistic_result()
+
         # 打印耗时总时间
         print_total_time_elapsed(time_s, time_e)
 
