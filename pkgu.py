@@ -228,6 +228,8 @@ class WriteDataToModel(PrettyTable):
     def _has_packages(self, /, packages: Optional[List[List[str]]], cb_func: Callable):
         if packages:
             cb_func(packages)
+        else:
+            cb_func()
 
     # 更新包到最新版本
     def __call__(self, *args, **kwargs):

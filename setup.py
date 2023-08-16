@@ -36,7 +36,7 @@ with open(join(PROJECT_ROOT, "pyproject.toml"), "r") as f_read:
 dependencies.update(**dev_dependencies)
 __install_reqs__ = []
 for dep, version in dependencies.items():
-    if dep == 'python':
+    if dep == "python":
         continue
     elif isinstance(version, dict):
         continue
