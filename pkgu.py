@@ -115,6 +115,49 @@ def run_subprocess_cmd(commands: Union[str, list]) -> Tuple[str, bool]:
         sys.exit(1)
 
 
+async def run_subprocess_cmd_async(commands: Union[str, list]) -> Tuple[str, bool]:
+    src_file_name = pathlib.Path(inspect.getfile(inspect.currentframe())).name
+    cmd_str = ""
+
+    if isinstance(commands, str):
+        cmd_str = commands
+    elif isinstance(commands, list):
+        for element in commands:
+            if isinstance(element, list):
+                loggerIns.error("Error: the element in Commands must be string type.")
+                exit(1)
+
+            cmd_str = " ".join(commands)
+
+    complete_result = await asyncio.subprocess.create_subprocess_shell(
+        cmd_str,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+
+    try:
+        stdout, stderr = await complete_result.communicate()
+
+        if complete_result.returncode == 0:
+            return stdout.decode("utf-8"), True
+        else:
+            err_msg = traceback.format_exc()
+            loggerIns.error(
+                f"Error: Return Code: {complete_result.returncode}, {err_msg}"
+            )
+            return stderr.decode("utf-8"), False
+
+    except subprocess.CalledProcessError:
+        func_name = inspect.getframeinfo(inspect.currentframe()).function
+        loggerIns.error(f"[{src_file_name}] exception in {func_name}")
+        complete_result.kill()
+
+        while await complete_result.wait():
+            loggerIns.info(f"[{src_file_name}] is waiting the child exit.")
+
+        exit(1)
+
+
 class PackageInfoBase(BaseModel):
     """The basic package infomation."""
 
@@ -202,6 +245,27 @@ class WriteDataToModel(PrettyTable):
             else:
                 self.fail_install.append(install_res[1])
 
+    async def _upgrade_packages_async(
+        self,
+        packages: List[Tuple[T_NAME, T_VERSION, T_LATEST_VERSION, T_LATEST_FILETYPE]],
+    ):
+        """Upgrade packages with asynchronous way.
+
+        Args:
+            packages:
+                (List[Tuple[T_NAME, T_VERSION, T_LATEST_VERSION, T_LATEST_FILETYPE]])
+        """
+        for package_list in packages:
+            package = package_list
+            install_res = await upgrade_expired_package_async(
+                package[0], package[1], package[2]
+            )
+
+            if install_res[0]:
+                self.success_install.append(install_res[1])
+            else:
+                self.fail_install.append(install_res[1])
+
     def upgrade_packages(self):
         return self._has_packages(self.packages, self._upgrade_packages)
 
@@ -230,6 +294,15 @@ class WriteDataToModel(PrettyTable):
             cb_func(packages)
         else:
             cb_func()
+
+    @staticmethod
+    async def _has_packages_async(
+        packages: Optional[List[List[str]]], cb_func: Callable
+    ):
+        if inspect.iscoroutinefunction(cb_func):
+            await cb_func(packages) if packages else await cb_func()
+        else:
+            cb_func(packages) if packages else cb_func()
 
     # 更新包到最新版本
     def __call__(self, *args, **kwargs):
@@ -317,6 +390,30 @@ def upgrade_expired_package(
     return update_res_bool, package_name
 
 
+async def upgrade_expired_package_async(
+    package_name: str, old_version: str, latest_version: str
+):
+    installing_msg = (  # noqa: E731
+        lambda verb: f"{verb} {package_name}, version: from {old_version} to {latest_version}..."
+    )
+
+    with Halo(
+        text=installing_msg("installing"),
+        spinner="dots",
+    ) as spinner:
+        update_cmd = "pip install --upgrade " + f"{package_name}=={latest_version}"
+        _, update_res_bool = await run_subprocess_cmd_async(update_cmd)
+
+        if update_res_bool:
+            spinner.text_color = "green"
+            spinner.succeed(installing_msg("installed"))
+        else:
+            spinner.text_color = "red"
+            spinner.fail(installing_msg("installation failed"))
+
+    return update_res_bool, package_name
+
+
 async def run_async(
     class_name: "WriteDataToModel", expired_packages: Optional[List] = None
 ):
@@ -345,6 +442,31 @@ async def run_async(
             class_name.fail_install.append(pak_name)
 
     class_name.statistic_result()
+
+
+async def run_async_with_async(
+    class_name: "WriteDataToModel", expired_packages: Optional[List] = None
+):
+    if not expired_packages:
+        expired_packages = class_name.packages
+
+    res_list = await asyncio.gather(
+        *[
+            asyncio.create_task(
+                upgrade_expired_package_async(package[0], package[1], package[2])
+            )
+            for package in expired_packages
+        ]
+    )
+
+    for result in res_list:
+        res_bool, pak_name = result
+        if res_bool:
+            class_name.success_install.append(pak_name)
+        else:
+            class_name.fail_install.append(pak_name)
+
+    await class_name.statistic_result()
 
 
 def get_python() -> Optional[str]:
