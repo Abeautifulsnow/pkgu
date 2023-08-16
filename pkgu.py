@@ -22,13 +22,13 @@ from colorama import Fore, Style, init
 from halo import Halo
 from loguru import logger
 from prettytable import PrettyTable
-from pydantic import BaseModel
+from pydantic import VERSION, BaseModel
 from simple_term_menu import TerminalMenu
 
 # 变量赋值
 ENV = os.environ.copy()
 ENV["PYTHONUNBUFFERED"] = "1"
-VERSION = importlib_metadata.version("pkgu")
+# VERSION = importlib_metadata.version("pkgu")
 
 # 初始化
 loggerIns = logger
@@ -123,6 +123,52 @@ class PackageInfoBase(BaseModel):
     latest_version: AnyStr
     latest_filetype: AnyStr
 
+    if VERSION.split(".")[0] < "2":
+        from pydantic import validator
+
+        @validator("name")
+        def name_to_str(cls, v: AnyStr):
+            if isinstance(v, str):
+                return v
+
+            if isinstance(v, bytes):
+                return v.decode()
+
+        @validator("version")
+        def version_to_str(cls, v: AnyStr):
+            if isinstance(v, str):
+                return v
+
+            if isinstance(v, bytes):
+                return v.decode()
+
+        @validator("latest_version")
+        def latest_version_to_str(cls, v: AnyStr):
+            if isinstance(v, str):
+                return v
+
+            if isinstance(v, bytes):
+                return v.decode()
+
+        @validator("latest_filetype")
+        def latest_filetype_to_str(cls, v: AnyStr):
+            if isinstance(v, str):
+                return v
+
+            if isinstance(v, bytes):
+                return v.decode()
+
+    else:
+        from pydantic import field_validator
+
+        @field_validator("*")
+        @classmethod
+        def field_to_str(cls, v: AnyStr):
+            if isinstance(v, str):
+                return v
+            if isinstance(v, bytes):
+                return v.decode()
+
 
 class AllPackagesExpiredBaseModel(BaseModel):
     """The list of packages."""
@@ -162,10 +208,10 @@ class WriteDataToModel(PrettyTable):
     ) -> List[Tuple[T_NAME, T_VERSION, T_LATEST_VERSION, T_LATEST_FILETYPE]]:
         return [
             (
-                package_info.name.decode(),
-                package_info.version.decode(),
-                package_info.latest_version.decode(),
-                package_info.latest_filetype.decode(),
+                package_info.name,
+                package_info.version,
+                package_info.latest_version,
+                package_info.latest_filetype,
             )
             for package_info in self.model.packages
         ]
@@ -383,13 +429,13 @@ def parse_args():
         help="Update the library asynchronously.",
         action="store_true",
     )
-    parse.add_argument(
-        "-v",
-        "--version",
-        help="Display %(prog)s version and information",
-        action="version",
-        version=f"%(prog)s {VERSION}",
-    )
+    # parse.add_argument(
+    #     "-v",
+    #     "--version",
+    #     help="Display %(prog)s version and information",
+    #     action="version",
+    #     version=f"%(prog)s {VERSION}",
+    # )
 
     return parse.parse_args()
 
