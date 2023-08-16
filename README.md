@@ -1,6 +1,7 @@
 # pkgu
 
-Find the out-dated packages installed by the Pip tool and update them. Inspired by 👉[depu](https://github.com/kevwan/depu)
+Find the out-dated packages installed by the Pip tool and update them. Inspired by 👉[depu(Go)](https://github.com/kevwan/depu).
+However, `pkgu` supports full and partial updates, which is more convenient and flexible.
 
 ## Usage
 
@@ -26,7 +27,7 @@ python3 pkgu.py
 pip3 install pkgu
 ```
 
-after the installation is complete, you can enter `pkgu -h` command on your terminal to learn how to use it.
+after the installation is complete, `pkgu` executable file will be written to the python bin directory and you can enter `pkgu -h` command on your terminal to learn how to use it.
 
 ## ScreenShoot
 
