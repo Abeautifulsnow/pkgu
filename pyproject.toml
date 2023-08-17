@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pkgu"
-version = "0.0.17"
+version = "0.0.18"
 description = "Find the out-dated packages installed by the pip tool and update them."
 authors = ["Abeautifulsnow <lnrunstone.0727@gmail.com>"]
 
@@ -22,3 +22,6 @@ importlib-metadata = {version = "^1.0", python = "<3.8"}
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.isort]
+profile = "black"
