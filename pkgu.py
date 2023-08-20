@@ -12,6 +12,8 @@ import traceback
 from functools import lru_cache
 from typing import AnyStr, Callable, List, NewType, Optional, Tuple, Union
 
+from cache import DAO
+
 try:
     import importlib.metadata as importlib_metadata
 except ModuleNotFoundError:
@@ -177,16 +179,22 @@ class AllPackagesExpiredBaseModel(BaseModel):
 
 
 class WriteDataToModel(PrettyTable):
-    command = "pip list --outdated --format=json"
+    __slots__ = ("db", "command")
 
     def __init__(self, spinner: "Halo", py_env: str):
+        self.command = "pip list --outdated --format=json"
+        self.db = DAO(expired_time=43200)
+
         self.spinner = spinner
         self.spinner.start()
         super().__init__(
             field_names=["Name", "Version", "Latest Version", "Latest FileType"],
             border=True,
         )
-        self.ori_data = run_subprocess_cmd(f"{py_env} -m " + self.command)
+        self.ori_data = self.db.get_result(
+            self.command, run_subprocess_cmd, f"{py_env} -m {self.command}"
+        )
+        # self.ori_data = run_subprocess_cmd(f"{py_env} -m " + self.command)
         self.model: Optional[AllPackagesExpiredBaseModel] = None
         self.to_model()
         self.packages: Optional[
@@ -281,6 +289,13 @@ class WriteDataToModel(PrettyTable):
     def __call__(self, *args, **kwargs):
         self.upgrade_packages()
         self.statistic_result()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.db.cursor.close()
+        self.db.conn.close()
 
 
 class UserOptions:
@@ -458,51 +473,53 @@ def entry():
             loggerIns.error("The python3 environment is invalid.")
             return None
 
-        wdt = WriteDataToModel(spinner, python_env)
-        wdt.pretty_table()
+        # wdt = WriteDataToModel(spinner, python_env)
+        # wdt.pretty_table()
+        with WriteDataToModel(spinner, python_env) as wdt:
+            wdt.pretty_table()
 
-    if len(wdt.model.packages) == 0:
-        # 打印耗时总时间
-        print_total_time_elapsed(time_s)
-        return
-    else:
-        # Get the current time stamp.
-        time_e = time.time()
+            if len(wdt.model.packages) == 0:
+                # 打印耗时总时间
+                print_total_time_elapsed(time_s)
+                return
+            else:
+                # Get the current time stamp.
+                time_e = time.time()
 
-        uo = UserOptions()
+                uo = UserOptions()
 
-        flag = uo.ifUpgradeModules()
+                flag = uo.ifUpgradeModules()
 
-        if flag == "yes":
-            all_or_portion = uo.ifUpdateAllModules()
-            match all_or_portion:
-                case "all":
-                    if args.async_upgrade:
-                        asyncio.run(run_async(wdt))
-                        # Get the current time stamp.
-                        time_e = time.time()
-                    else:
-                        wdt()
-                case "portion":
-                    select_menus = uo.updateOneOfPackages(wdt.packages)
-                    if select_menus:
-                        select_menus_update = [
-                            extract_substrings_with_split(package_str)
-                            for package_str in select_menus
-                        ]
+                if flag == "yes":
+                    all_or_portion = uo.ifUpdateAllModules()
+                    match all_or_portion:
+                        case "all":
+                            if args.async_upgrade:
+                                asyncio.run(run_async(wdt))
+                                # Get the current time stamp.
+                                time_e = time.time()
+                            else:
+                                wdt()
+                        case "portion":
+                            select_menus = uo.updateOneOfPackages(wdt.packages)
+                            if select_menus:
+                                select_menus_update = [
+                                    extract_substrings_with_split(package_str)
+                                    for package_str in select_menus
+                                ]
 
-                        if args.async_upgrade:
-                            asyncio.run(run_async(wdt, select_menus_update))
-                            # Get the current time stamp.
-                            time_e = time.time()
-                        else:
-                            wdt._has_packages(
-                                select_menus_update, wdt._upgrade_packages
-                            )
-                            wdt.statistic_result()
+                                if args.async_upgrade:
+                                    asyncio.run(run_async(wdt, select_menus_update))
+                                    # Get the current time stamp.
+                                    time_e = time.time()
+                                else:
+                                    wdt._has_packages(
+                                        select_menus_update, wdt._upgrade_packages
+                                    )
+                                    wdt.statistic_result()
 
-        # 打印耗时总时间
-        print_total_time_elapsed(time_s, time_e)
+                # 打印耗时总时间
+                print_total_time_elapsed(time_s, time_e)
 
 
 def main():
