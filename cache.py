@@ -1,4 +1,5 @@
 import hashlib
+import os
 import pickle
 import sqlite3
 import time
@@ -11,25 +12,33 @@ from loguru import logger
 class DAO:
     def __init__(
         self,
-        db_file: str = "cache.db",
+        db_file: str,
+        expired_time: int,
+        no_cache: bool,
+        /,
         table_name: str = "cache",
-        expired_time: int = 3600,
     ) -> None:
-        self.db_file = db_file
+        self.db_file = os.path.expanduser(db_file)
         self.expired_time = expired_time
+        self.no_cache = no_cache
 
-        # with self.init_db() as connection:
+        self.create_cache_folder()
         self.conn: Connection = next(self.init_db())
         self.cursor: Cursor = self.conn.cursor()
 
         self.table_name = table_name
         self.create_table(table_name)
 
+    def create_cache_folder(self):
+        if not os.path.exists(self.db_file):
+            folder_path = os.path.dirname(self.db_file)
+            os.makedirs(folder_path, exist_ok=True)
+
     def init_db(self) -> Connection:
         try:
             yield sqlite3.connect(self.db_file)
         except (OperationalError, Exception) as e:
-            logger.error("Failed to connect to sqlite db")
+            logger.error(f"Failed to connect to sqlite db => {self.db_file}")
             raise e
 
     def _execute_sql(
@@ -73,31 +82,45 @@ class DAO:
         self.conn.commit()
 
     @staticmethod
-    def get_cache_key(key: str):
+    def get_cache_key(key: str) -> str:
         # Generate a unique cache key based on script arguments or inputs
         db_key = hashlib.md5(key.encode()).hexdigest()
 
         return db_key
+
+    def get_result_with_no_cache(
+        self,
+        cache_key: str,
+        nocache_fn: Callable[[Union[str, list]], Tuple[str, bool]],
+        param: Union[str, list],
+    ) -> Tuple[str]:
+        cost_time_res, bool_r = nocache_fn(param)
+        if bool_r:
+            expiration_time = int(time.time()) + self.expired_time
+            self.store_in_cache(cache_key, cost_time_res, expiration_time)
+            logger.debug("Origin result")
+
+            return (cost_time_res,)
+        else:
+            raise ValueError(f"The result if wrong. Command: {param}")
+
+    def get_result_with_cache(self, cache_key: str):
+        cache_res = self.get_from_cache(cache_key)
+        return cache_res
 
     def get_result(
         self,
         key: str,
         nocache_fn: Callable[[Union[str, list]], Tuple[str, bool]],
         param: Union[str, list],
-    ) -> str:
+    ) -> Tuple[str]:
         cache_key = self.get_cache_key(key)
-        cache_res = self.get_from_cache(cache_key)
 
-        if cache_res:
-            logger.debug("\nResult (from cache)")
-            return (cache_res,)
+        if self.no_cache:
+            return self.get_result_with_no_cache(key, nocache_fn, param)
         else:
-            cost_time_res, bool_r = nocache_fn(param)
-            if bool_r:
-                expiration_time = int(time.time()) + self.expired_time
-                self.store_in_cache(cache_key, cost_time_res, expiration_time)
-                logger.debug("\nOrigin result")
-
-                return (cost_time_res,)
+            cache_res = self.get_result_with_cache(cache_key)
+            if cache_res:
+                return (cache_res,)
             else:
-                raise ValueError(f"The result if wrong. Command: {param}")
+                return self.get_result_with_no_cache(key, nocache_fn, param)
