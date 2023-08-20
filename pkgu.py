@@ -181,9 +181,16 @@ class AllPackagesExpiredBaseModel(BaseModel):
 class WriteDataToModel(PrettyTable):
     __slots__ = ("db", "command")
 
-    def __init__(self, spinner: "Halo", py_env: str):
+    def __init__(
+        self,
+        spinner: "Halo",
+        py_env: str,
+        cache_path: str,
+        cache_valid_duration: int,
+        no_cache: bool,
+    ):
         self.command = "pip list --outdated --format=json"
-        self.db = DAO(expired_time=43200)
+        self.db = DAO(cache_path, cache_valid_duration, no_cache)
 
         self.spinner = spinner
         self.spinner.start()
@@ -441,7 +448,27 @@ def parse_args():
     parse.add_argument(
         "-a",
         "--async_upgrade",
-        help="Update the library asynchronously.",
+        help="Update the library asynchronously. Default: %(default)s",
+        action="store_true",
+    )
+    parse.add_argument(
+        "-d",
+        "--cache_folder",
+        help="The cache.db file. Default: %(default)s",
+        type=str,
+        default="~/.cache/cache.db",
+    )
+    parse.add_argument(
+        "-e",
+        "--expire_time",
+        help="The expiration time. Default: %(default)s",
+        type=int,
+        default=43200,
+    )
+    parse.add_argument(
+        "--no-cache",
+        dest="no_cache",
+        help="Whether to use db cache. Default: %(default)s",
         action="store_true",
     )
     parse.add_argument(
@@ -473,9 +500,9 @@ def entry():
             loggerIns.error("The python3 environment is invalid.")
             return None
 
-        # wdt = WriteDataToModel(spinner, python_env)
-        # wdt.pretty_table()
-        with WriteDataToModel(spinner, python_env) as wdt:
+        with WriteDataToModel(
+            spinner, python_env, args.cache_folder, int(args.expire_time), args.no_cache
+        ) as wdt:
             wdt.pretty_table()
 
             if len(wdt.model.packages) == 0:
@@ -517,7 +544,8 @@ def entry():
                                         select_menus_update, wdt._upgrade_packages
                                     )
                                     wdt.statistic_result()
-
+                else:
+                    pass
                 # 打印耗时总时间
                 print_total_time_elapsed(time_s, time_e)
 
