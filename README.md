@@ -52,7 +52,7 @@ after the installation is complete, `pkgu` executable file will be written to th
 We can see that the async method is faster than sync method about 9 seconds(Only in this test situation).
 So now it can support to update the python libraries asynchronously. 🥳
 
-> 5. !!!New - Support for selectable update packages
+> 5. Support for selectable update packages
 
 * List all availbable packages
 
@@ -61,3 +61,7 @@ So now it can support to update the python libraries asynchronously. 🥳
 * Select ths part of package to be updated
 
 ![img_7.png](https://raw.githubusercontent.com/Abeautifulsnow/pkgu/main/screenshoot/img_7.png)
+
+> 6. !!!New - Support to use cache result from sqlite db file.
+
+This improve the expirence that how we list the out-dated packages when they are huge to collect, and then there also is a cli flag `--no-cache` to control whether should to use cache.
