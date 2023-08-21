@@ -206,7 +206,7 @@ class WriteDataToModel(PrettyTable):
             border=True,
         )
         self.ori_data = self.db.get_result(
-            self.command, run_subprocess_cmd, f"{py_env} -m {self.command}"
+            py_env, run_subprocess_cmd, f"{py_env} -m {self.command}"
         )
         # self.ori_data = run_subprocess_cmd(f"{py_env} -m " + self.command)
         self.model: Optional[AllPackagesExpiredBaseModel] = None
@@ -424,17 +424,12 @@ async def run_async(
 
 def get_python() -> Optional[str]:
     """Return the path of executable python"""
-    py_path = sys.executable
+    py_path = shutil.which("python3") or shutil.which("python")
 
     if py_path is not None:
         return py_path
     else:
-        py_path = shutil.which("python3")
-
-        if py_path is not None:
-            return py_path
-        else:
-            return None
+        return None
 
 
 class DAO:
