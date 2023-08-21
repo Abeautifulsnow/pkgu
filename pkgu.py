@@ -540,13 +540,13 @@ class DAO:
         cache_key = self.get_cache_key(key)
 
         if self.no_cache:
-            return self.get_result_with_no_cache(key, nocache_fn, param)
+            return self.get_result_with_no_cache(cache_key, nocache_fn, param)
         else:
             cache_res = self.get_result_with_cache(cache_key)
             if cache_res:
                 return (cache_res,)
             else:
-                return self.get_result_with_no_cache(key, nocache_fn, param)
+                return self.get_result_with_no_cache(cache_key, nocache_fn, param)
 
 
 def print_total_time_elapsed(start_time: float, time_end: Optional[float] = None):
