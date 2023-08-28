@@ -5,6 +5,7 @@ import inspect
 import os
 import pathlib
 import pickle
+import platform
 import shutil
 import signal
 import sqlite3
@@ -12,6 +13,7 @@ import subprocess
 import sys
 import time
 import traceback
+from abc import ABCMeta, abstractmethod
 from functools import lru_cache
 from sqlite3 import Connection, Cursor, OperationalError
 from typing import (
@@ -37,7 +39,17 @@ from halo import Halo
 from loguru import logger
 from prettytable import PrettyTable
 from pydantic import VERSION, BaseModel
-from simple_term_menu import TerminalMenu
+
+# The current platform
+SYSTEM = platform.system()
+
+if SYSTEM == "Windows":
+    from inquirer import Checkbox as IQ_Checkbox
+    from inquirer import List as IQ_List
+    from inquirer import prompt as IQ_Prompt
+else:
+    from simple_term_menu import TerminalMenu
+
 
 # 变量赋值
 ENV = os.environ.copy()
@@ -49,6 +61,23 @@ T_NAME = NewType("T_NAME", str)
 T_VERSION = NewType("T_VERSION", str)
 T_LATEST_VERSION = NewType("T_LATEST_VERSION", str)
 T_LATEST_FILETYPE = NewType("T_LATEST_FILETYPE", str)
+
+
+def clear_lines(num_lines: int):
+    """Make use of the escape sequences to clear several lines on terminal.
+    It works in mose common terminals, but there may be some variations or
+    limitations across different systems.
+
+    Args:
+        num_lines (int): how many lines need to be cleared from bottom to top.
+    """
+    # Move the cursor up 'num_lines' lines
+    sys.stdout.write("\033[{}A".format(num_lines))
+    # Clear the lines
+    sys.stdout.write("\033[2K" * num_lines)
+    # Move the cursor back to the beginning of the first cleared line
+    sys.stdout.write("\033[{}G".format(0))
+    sys.stdout.flush()
 
 
 def import_module(module_name: str) -> None:
@@ -312,7 +341,71 @@ class WriteDataToModel(PrettyTable):
         self.db.conn.close()
 
 
-class UserOptions:
+class BaseOptions(metaclass=ABCMeta):
+    @abstractmethod
+    def base_option_single(
+        self, title: str, options: List[str], name: Optional[str] = None
+    ) -> str:
+        raise NotImplementedError("method not implemented")
+
+    @abstractmethod
+    def ifUpgradeModules(self) -> str:
+        raise NotImplementedError("method not implemented")
+
+    @abstractmethod
+    def ifUpdateAllModules(self) -> str:
+        raise NotImplementedError("method not implemented")
+
+    @abstractmethod
+    def updateOneOfPackages(
+        self,
+        packages: List[Tuple[T_NAME, T_VERSION, T_LATEST_VERSION, T_LATEST_FILETYPE]],
+        # upgrade_func: Callable[[str, str, str], None],
+    ) -> Optional[Tuple[str]]:
+        raise NotImplementedError("method not implemented")
+
+
+class UserOptionsForWindows(BaseOptions):
+    global IQ_List, IQ_Checkbox, IQ_Prompt
+
+    def __init__(self):
+        self.single = IQ_List
+        self.mutiple = IQ_Checkbox
+
+    def base_option_single(
+        self, title: str, options: List[str], name: Optional[str] = None
+    ) -> str:
+        questions = [self.single(name, message=title, choices=options)]
+        answers = IQ_Prompt(questions)
+        return answers.get(name)
+
+    def ifUpgradeModules(self) -> str:
+        name = "single"
+        title = "continue with the package update?"
+        options = ["yes", "no"]
+        return self.base_option_single(title, options, name)
+
+    def ifUpdateAllModules(self) -> str:
+        name = "single"
+        title = "Update all packages listed above or portion of them?"
+        options = ["all", "portion"]
+        return self.base_option_single(title, options, name)
+
+    def updateOneOfPackages(
+        self,
+        packages: List[Tuple[T_NAME, T_VERSION, T_LATEST_VERSION, T_LATEST_FILETYPE]],
+        # upgrade_func: Callable[[str, str, str], None],
+    ) -> Optional[Tuple[str]]:
+        title = "Select one of these packages to update"
+        options = [f"{package[0]}@{package[1]}=>{package[2]}" for package in packages]
+        _name = "multiple"
+        terminal_package_option = [self.mutiple(_name, message=title, choices=options)]
+
+        answers = IQ_Prompt(terminal_package_option)
+        return answers.get(_name)
+
+
+class UserOptions(BaseOptions):
     """
     用户选项类，自定义用户选项
     """
@@ -320,7 +413,9 @@ class UserOptions:
     def __init__(self):
         self.tm = TerminalMenu
 
-    def _base_option_single(self, title: str, options: List[str]) -> str:
+    def base_option_single(
+        self, title: str, options: List[str], name: Optional[str] = None
+    ) -> str:
         terminal_menu = self.tm(options, title=title)
         menu_entry_index = terminal_menu.show()
         return options[menu_entry_index]
@@ -328,12 +423,12 @@ class UserOptions:
     def ifUpgradeModules(self) -> str:
         title = "continue with the package update?"
         options = ["yes", "no"]
-        return self._base_option_single(title, options)
+        return self.base_option_single(title, options)
 
     def ifUpdateAllModules(self) -> str:
         title = "Update all packages listed above or portion of them?"
         options = ["all", "portion"]
-        return self._base_option_single(title, options)
+        return self.base_option_single(title, options)
 
     def updateOneOfPackages(
         self,
@@ -601,6 +696,14 @@ def parse_args():
     return parse.parse_args()
 
 
+def user_option_cls_factory(sys_name: str):
+    """The factory functions"""
+    if sys_name == "Windows":
+        return UserOptionsForWindows()
+    else:
+        return UserOptions()
+
+
 def entry():
     """Main entrance."""
     args = parse_args()
@@ -632,7 +735,7 @@ def entry():
                 # Get the current time stamp.
                 time_e = time.time()
 
-                uo = UserOptions()
+                uo = user_option_cls_factory(SYSTEM)
 
                 flag = uo.ifUpgradeModules()
 

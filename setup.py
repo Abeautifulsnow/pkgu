@@ -22,11 +22,11 @@ __modules__ = ["pkgu", "--version"]
 # Load the package's _version.py module as a dictionary.
 PROJECT_ROOT = dirname(realpath(__file__))
 
-with open(join(PROJECT_ROOT, "README.md"), "r") as md_read:
+with open(join(PROJECT_ROOT, "README.md")) as md_read:
     __long_description__ = md_read.read()
 
 # generate the dependency data
-with open(join(PROJECT_ROOT, "pyproject.toml"), "r") as f_read:
+with open(join(PROJECT_ROOT, "pyproject.toml")) as f_read:
     content = toml.load(f_read)
     dependencies = content["tool"]["poetry"]["dependencies"]
     dev_dependencies = content["tool"]["poetry"]["dev-dependencies"]
@@ -53,7 +53,7 @@ class UploadCommand(Command):
 
     @staticmethod
     def status(s):
-        print("✨✨ {0}".format(s))
+        print("✨✨ {}".format(s))
 
     def initialize_options(self):
         pass
@@ -66,12 +66,12 @@ class UploadCommand(Command):
             self.status("Removing previous builds…")
             rmtree(os.path.join(PROJECT_ROOT, "dist"))
             rmtree(os.path.join(PROJECT_ROOT, "build"))
-            rmtree(os.path.join(PROJECT_ROOT, "{0}.egg-info".format(__title__)))
+            rmtree(os.path.join(PROJECT_ROOT, "{}.egg-info".format(__title__)))
         except OSError:
             pass
 
         self.status("Building Source and Wheel distribution…")
-        os.system("{0} setup.py bdist_wheel".format(sys.executable))
+        os.system("{} setup.py bdist_wheel".format(sys.executable))
 
         self.status("Uploading the package to PyPI via Twine…")
         return_code = os.system("twine upload dist/* --verbose")
@@ -79,7 +79,7 @@ class UploadCommand(Command):
         if not return_code:
             self.status("Pushing git tags…")
             os.system('git tag -a v{0} -m "release version v{0}"'.format(__version__))
-            os.system("git push origin v{0}".format(__version__))
+            os.system("git push origin v{}".format(__version__))
 
         sys.exit()
 
@@ -107,10 +107,8 @@ setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
         "Programming Language :: Python",
-        "Programming Language :: Python :: 3.6",
-        "Programming Language :: Python :: 3.7",
-        "Programming Language :: Python :: 3.8",
-        "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
         "Topic :: Software Development :: Libraries",
     ],
     cmdclass={"upload": UploadCommand},
