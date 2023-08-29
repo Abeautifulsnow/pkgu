@@ -620,7 +620,7 @@ class DAO:
 
             return (cost_time_res,)
         else:
-            raise ValueError(f"The result if wrong. Command: {param}")
+            raise ValueError(f"The result is wrong. Command: {param}")
 
     def get_result_with_cache(self, cache_key: str):
         cache_res = self.get_from_cache(cache_key)
