@@ -519,7 +519,7 @@ async def run_async(
 
 def get_python() -> Optional[str]:
     """Return the path of executable python"""
-    py_path = shutil.which("python3") or shutil.which("python")
+    py_path = shutil.which("python") or shutil.which("python3")
 
     if py_path is not None:
         return py_path
