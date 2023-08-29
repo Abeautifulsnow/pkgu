@@ -377,7 +377,9 @@ class UserOptionsForWindows(BaseOptions):
     ) -> str:
         questions = [self.single(name, message=title, choices=options)]
         answers = IQ_Prompt(questions)
-        return answers.get(name)
+
+        if answers:
+            return answers.get(name)
 
     def ifUpgradeModules(self) -> str:
         name = "single"
@@ -400,9 +402,10 @@ class UserOptionsForWindows(BaseOptions):
         options = [f"{package[0]}@{package[1]}=>{package[2]}" for package in packages]
         _name = "multiple"
         terminal_package_option = [self.mutiple(_name, message=title, choices=options)]
-
         answers = IQ_Prompt(terminal_package_option)
-        return answers.get(_name)
+
+        if answers:
+            return answers.get(_name)
 
 
 class UserOptions(BaseOptions):

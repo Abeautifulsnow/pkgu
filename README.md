@@ -1,7 +1,9 @@
 # pkgu
 
 Find the out-dated packages installed by the Pip tool and update them. Inspired by 👉[depu(Go)](https://github.com/kevwan/depu).
-However, `pkgu` supports full and partial updates, which is more convenient and flexible.
+However, `pkgu` supports full and partial updates, which is more convenient and flexible. It also supports cross-platform(Windows, linux, macos).
+
+👉 However, only python3.10 and above are available now.
 
 ## Usage
 
@@ -21,7 +23,7 @@ and then, run `pkgu.py` script.
 python3 pkgu.py
 ```
 
-- Use it through pip
+- Use it through pip - ***Highly Recommended***
 
 ```bash
 pip3 install pkgu
