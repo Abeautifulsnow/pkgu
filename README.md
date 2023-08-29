@@ -1,7 +1,7 @@
 # pkgu
 
 Find the out-dated packages installed by the Pip tool and update them. Inspired by 👉[depu(Go)](https://github.com/kevwan/depu).
-However, `pkgu` supports full and partial updates, which is more convenient and flexible. It also supports cross-platform(Windows, linux, macos).
+However, `pkgu` supports full and partial updates, which is more convenient and flexible. It also supports cross-platform(Windows, linux, macos). 🤓 To retrieve the data more fast after the first-time(Or don't have to execute command again), I use sqlite as cache db to store the data and can quickly read it from db and present it to the console💻.
 
 👉 However, only python3.10 and above are available now.
 
