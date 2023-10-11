@@ -381,6 +381,8 @@ class UserOptionsForWindows(BaseOptions):
         if answers:
             return answers.get(name)
 
+        return ""
+
     def ifUpgradeModules(self) -> str:
         name = "single"
         title = "continue with the package update?"
@@ -407,6 +409,8 @@ class UserOptionsForWindows(BaseOptions):
         if answers:
             return answers.get(_name)
 
+        return None
+
 
 class UserOptions(BaseOptions):
     """
@@ -421,7 +425,11 @@ class UserOptions(BaseOptions):
     ) -> str:
         terminal_menu = self.tm(options, title=title)
         menu_entry_index = terminal_menu.show()
-        return options[menu_entry_index]
+
+        if menu_entry_index is not None:
+            return options[menu_entry_index]
+
+        return ""
 
     def ifUpgradeModules(self) -> str:
         title = "continue with the package update?"
@@ -528,6 +536,12 @@ def get_python() -> Optional[str]:
         return py_path
     else:
         return None
+
+
+def print_py_env_with_table(env_str: str):
+    pt = PrettyTable(field_names=["🐍 The Executive Path of Python"], border=True)
+    pt.add_row([env_str])
+    print(pt.get_string(), flush=True)
 
 
 class DAO:
@@ -729,6 +743,7 @@ def entry():
             spinner, python_env, args.cache_folder, int(args.expire_time), args.no_cache
         ) as wdt:
             wdt.pretty_table()
+            print_py_env_with_table(python_env)
 
             if len(wdt.model.packages) == 0:
                 # 打印耗时总时间
