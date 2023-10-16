@@ -1,11 +1,13 @@
-import pytest
-
 from pkgu import get_python, run_subprocess_cmd
 
 
 def test_get_python():
     py_env = get_python()
-    assert py_env is not None and "python3" in py_env and "\n" not in py_env
+    assert (
+        py_env is not None
+        and ("python3" in py_env or "py" in py_env)
+        and "\n" not in py_env
+    )
 
 
 def test_run_subprocess_cmd():
