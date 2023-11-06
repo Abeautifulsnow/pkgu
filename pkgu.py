@@ -342,19 +342,21 @@ class WriteDataToModel(PrettyTable):
 
 
 class BaseOptions(metaclass=ABCMeta):
+    __not_implement_msg = "method not implemented"
+
     @abstractmethod
     def base_option_single(
         self, title: str, options: List[str], name: Optional[str] = None
     ) -> str:
-        raise NotImplementedError("method not implemented")
+        raise NotImplementedError(self.__not_implement_msg)
 
     @abstractmethod
     def ifUpgradeModules(self) -> str:
-        raise NotImplementedError("method not implemented")
+        raise NotImplementedError(self.__not_implement_msg)
 
     @abstractmethod
     def ifUpdateAllModules(self) -> str:
-        raise NotImplementedError("method not implemented")
+        raise NotImplementedError(self.__not_implement_msg)
 
     @abstractmethod
     def updateOneOfPackages(
@@ -362,7 +364,7 @@ class BaseOptions(metaclass=ABCMeta):
         packages: List[Tuple[T_NAME, T_VERSION, T_LATEST_VERSION, T_LATEST_FILETYPE]],
         # upgrade_func: Callable[[str, str, str], None],
     ) -> Optional[Tuple[str]]:
-        raise NotImplementedError("method not implemented")
+        raise NotImplementedError(self.__not_implement_msg)
 
 
 class UserOptionsForWindows(BaseOptions):
