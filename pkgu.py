@@ -351,7 +351,7 @@ class BaseOptions(metaclass=ABCMeta):
         raise NotImplementedError(self.__not_implement_msg)
 
     @abstractmethod
-    def ifUpgradeModules(self) -> str:
+    def ifUpgradeModules(self, *args, **kwargs) -> str:
         raise NotImplementedError(self.__not_implement_msg)
 
     @abstractmethod
@@ -385,9 +385,9 @@ class UserOptionsForWindows(BaseOptions):
 
         return ""
 
-    def ifUpgradeModules(self) -> str:
+    def ifUpgradeModules(self, *args, **kwargs) -> str:
         name = "single"
-        title = "continue with the package update?"
+        title = f"continue with the package update({args[0]} packages)?"
         options = ["yes", "no"]
         return self.base_option_single(title, options, name)
 
@@ -433,8 +433,8 @@ class UserOptions(BaseOptions):
 
         return ""
 
-    def ifUpgradeModules(self) -> str:
-        title = "continue with the package update?"
+    def ifUpgradeModules(self, *args, **kwargs) -> str:
+        title = f"continue with the package update({args[0]} packages)?"
         options = ["yes", "no"]
         return self.base_option_single(title, options)
 
@@ -757,7 +757,7 @@ def entry():
 
                 uo = user_option_cls_factory(SYSTEM)
 
-                flag = uo.ifUpgradeModules()
+                flag = uo.ifUpgradeModules(len(wdt.packages))
 
                 if flag == "yes":
                     all_or_portion = uo.ifUpdateAllModules()
