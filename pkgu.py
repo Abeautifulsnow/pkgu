@@ -14,19 +14,10 @@ import sys
 import time
 import traceback
 from abc import ABCMeta, abstractmethod
+from collections import defaultdict
 from functools import lru_cache
 from sqlite3 import Connection, Cursor, OperationalError
-from typing import (
-    Any,
-    AnyStr,
-    Callable,
-    List,
-    NewType,
-    Optional,
-    Sequence,
-    Tuple,
-    Union,
-)
+from typing import Any, AnyStr, Callable, NewType, Optional, Sequence, Union
 
 try:
     import importlib.metadata as importlib_metadata
@@ -34,9 +25,22 @@ except ModuleNotFoundError:
     import importlib_metadata
 
 import orjson
+import pip
 from colorama import Fore, Style, init
 from halo import Halo
 from loguru import logger
+
+try:
+    from pkg_resources import Distribution
+    from pkg_resources import DistributionNotFound as _DistributionNotFound
+    from pkg_resources import VersionConflict as _VersionConflict
+    from pkg_resources import get_distribution, working_set
+except (DeprecationWarning, ModuleNotFoundError, ImportError):
+    # TODO: Need to develop a backward-compatible version and use other way instead.
+    # https://setuptools.pypa.io/en/latest/pkg_resources.html
+    pass
+
+
 from prettytable import PrettyTable
 from pydantic import VERSION, BaseModel
 
@@ -51,6 +55,25 @@ else:
     from simple_term_menu import TerminalMenu
 
 
+try:
+    # pip >= 10.0.0 hides main in pip._internal. We'll monkey patch what we need and hopefully this becomes available
+    # at some point.
+    from pip import main
+
+    pip.main = main
+except (ModuleNotFoundError, ImportError):
+    pass
+
+py_version = (sys.version_info.major, sys.version_info.minor)
+
+if py_version >= (3, 9):
+    Set = set
+    Tuple = tuple
+    List = list
+else:
+    from typing import List, Set, Tuple
+
+
 # 变量赋值
 ENV = os.environ.copy()
 ENV["PYTHONUNBUFFERED"] = "1"
@@ -62,6 +85,8 @@ T_VERSION = NewType("T_VERSION", str)
 T_LATEST_VERSION = NewType("T_LATEST_VERSION", str)
 T_LATEST_FILETYPE = NewType("T_LATEST_FILETYPE", str)
 
+WHITELIST = ["pip", "setuptools", "pip-autoremove", "wheel", "pkgu"]
+
 
 def clear_lines(num_lines: int):
     """Make use of the escape sequences to clear several lines on terminal.
@@ -71,13 +96,98 @@ def clear_lines(num_lines: int):
     Args:
         num_lines (int): how many lines need to be cleared from bottom to top.
     """
-    # Move the cursor up 'num_lines' lines
-    sys.stdout.write("\033[{}A".format(num_lines))
-    # Clear the lines
-    sys.stdout.write("\033[2K" * num_lines)
+    for _ in range(num_lines, -1, -1):
+        # Move the cursor up 'num_lines' lines
+        sys.stdout.write("\033[1A")
+        # Clear the lines
+        sys.stdout.write("\033[2K")
     # Move the cursor back to the beginning of the first cleared line
     sys.stdout.write("\033[{}G".format(0))
     sys.stdout.flush()
+
+
+##############################################
+#                Error Declare               #
+##############################################
+class ResolutionError(Exception):
+    """Abstract base for dependency resolution errors"""
+
+    def __repr__(self):
+        return self.__class__.__name__ + repr(self.args)
+
+
+class VersionConflict(ResolutionError):
+    """
+    An already-installed version conflicts with the requested version.
+
+    Should be initialized with the installed Distribution and the requested
+    Requirement.
+    """
+
+    _template = "{self.dist} is installed but {self.req} is required"
+
+    @property
+    def dist(self):
+        return self.args[0]
+
+    @property
+    def req(self):
+        return self.args[1]
+
+    def report(self):
+        return self._template.format(**locals())
+
+    def with_context(self, required_by):
+        """
+        If required_by is non-empty, return a version of self that is a
+        ContextualVersionConflict.
+        """
+        if not required_by:
+            return self
+        args = self.args + (required_by,)
+        return ContextualVersionConflict(*args)
+
+
+class ContextualVersionConflict(VersionConflict):
+    """
+    A VersionConflict that accepts a third parameter, the set of the
+    requirements that required the installed Distribution.
+    """
+
+    _template = VersionConflict._template + " by {self.required_by}"
+
+    @property
+    def required_by(self):
+        return self.args[2]
+
+
+class DistributionNotFound(ResolutionError):
+    """A requested distribution was not found"""
+
+    _template = (
+        "The '{self.req}' distribution was not found "
+        "and is required by {self.requirers_str}"
+    )
+
+    @property
+    def req(self):
+        return self.args[0]
+
+    @property
+    def requirers(self):
+        return self.args[1]
+
+    @property
+    def requirers_str(self):
+        if not self.requirers:
+            return "the application"
+        return ", ".join(self.requirers)
+
+    def report(self):
+        return self._template.format(**locals())
+
+    def __str__(self):
+        return self.report()
 
 
 def import_module(module_name: str) -> None:
@@ -237,7 +347,6 @@ class WriteDataToModel(PrettyTable):
         self.ori_data = self.db.get_result(
             py_env, run_subprocess_cmd, f"{py_env} -m {self.command}"
         )
-        # self.ori_data = run_subprocess_cmd(f"{py_env} -m " + self.command)
         self.model: Optional[AllPackagesExpiredBaseModel] = None
         self.to_model()
         self.packages: Optional[
@@ -663,6 +772,165 @@ class DAO:
                 return self.get_result_with_no_cache(cache_key, nocache_fn, param)
 
 
+##############################################
+#             Uninstall Function             #
+##############################################
+def autoremove(names, yes=False):
+    dead = list_dead(names)
+    if dead and (yes or confirm("Uninstall (y/N)? ")):
+        remove_dists(dead)
+
+
+def list_dead(names: List[str]):
+    start: Set[Distribution] = set()
+    for name in names:
+        try:
+            print(f"get_distribution(name)={get_distribution(name)}")
+            start.add(get_distribution(name))
+        except _DistributionNotFound:
+            print("%s is not an installed pip module, skipping" % name, file=sys.stderr)
+        except _VersionConflict:
+            print(
+                "%s is not the currently installed version, skipping" % name,
+                file=sys.stderr,
+            )
+
+    if not start:
+        return start
+
+    graph = get_graph()
+    dead = exclude_whitelist(find_all_dead(graph, start))
+    for d in start:
+        show_tree(d, dead)
+    return dead
+
+
+def exclude_whitelist(dists: List[Distribution]):
+    return {dist for dist in dists if dist.project_name not in WHITELIST}
+
+
+def show_tree(dist: Distribution, dead, indent=0, visited=None):
+    if visited is None:
+        visited = set()
+    if dist in visited:
+        return
+    visited.add(dist)
+    print(" " * 4 * indent, end="", file=sys.stderr)
+    show_dist(dist)
+    for req in requires(dist, False):
+        if req in dead:
+            show_tree(req, dead, indent + 1, visited)
+
+
+def find_all_dead(graph, start):
+    return fixed_point(lambda d: find_dead(graph, d), start)
+
+
+def find_dead(graph, dead):
+    def is_killed_by_us(node):
+        succ = graph[node]
+        return succ and not (succ - dead)
+
+    return dead | set(filter(is_killed_by_us, graph))
+
+
+def fixed_point(f, x):
+    while True:
+        y = f(x)
+        if y == x:
+            return x
+        x = y
+
+
+def confirm(prompt: str):
+    # Add support with `Enter` and word `y`.
+    return input(prompt).strip().lower() in ("y", "")
+
+
+def show_dist(dist: Distribution):
+    print(
+        "{} {} ({})".format(dist.project_name, dist.version, dist.location),
+        file=sys.stderr,
+    )
+
+
+def show_freeze(dist: Distribution):
+    print(dist.as_requirement())
+
+
+def remove_dists(dists: List[Distribution]):
+    if sys.executable:
+        pip_cmd = [sys.executable, "-m", "pip"]
+    else:
+        pip_cmd = ["pip"]
+    subprocess.check_call(
+        pip_cmd + ["uninstall", "-y"] + [d.project_name for d in dists]
+    )
+
+
+def get_graph(output=True):
+    g = defaultdict(set)
+    for dist in working_set:
+        g[dist]
+        for req in requires(dist, output):
+            g[req].add(dist)
+    return g
+
+
+def requires(dist: Distribution, output=True):
+    required = []
+    for pkg in dist.requires():
+        try:
+            # print(f"{pkg=}....")
+            required.append(get_distribution(pkg))
+        except _VersionConflict as e:
+            if output:
+                print("{} by {}".format(e.report(), dist.project_name), file=sys.stderr)
+                print("Redoing requirement with just package name...", file=sys.stderr)
+            required.append(get_distribution(pkg.project_name))
+        except _DistributionNotFound as e:
+            print(f"{dist=}, =========")
+            if output:
+                print(e.report(), file=sys.stderr)
+                print(
+                    "%s is not installed, but required by %s, skipping"
+                    % (pkg.project_name, dist.project_name),
+                    file=sys.stderr,
+                )
+    return required
+
+
+def remove_package_and_dependencies(args: "argparse.Namespace"):
+    """[Entry]: Remove package and its dependencies.
+
+    Args:
+        args (argparse.Namespace): Simple object for storing attributes.
+    """
+    if args.leaves or args.freeze:
+        list_leaves(args.freeze)
+    elif args.list:
+        dead = list_dead(args.pkg_name)
+        print(" ".join([d.project_name for d in dead]))
+    else:
+        autoremove(args.pkg_name, yes=args.yes)
+
+
+def get_leaves(graph):
+    def is_leaf(node):
+        return not graph[node]
+
+    return filter(is_leaf, graph)
+
+
+def list_leaves(freeze=False):
+    graph = get_graph(not freeze)
+    for node in get_leaves(graph):
+        if freeze:
+            show_freeze(node)
+        else:
+            show_dist(node)
+
+
 def print_total_time_elapsed(start_time: float, time_end: Optional[float] = None):
     elapsed: str
 
@@ -677,39 +945,86 @@ def print_total_time_elapsed(start_time: float, time_end: Optional[float] = None
 
 
 def parse_args():
-    parse = argparse.ArgumentParser(description="Upgrade python lib.", prog="pkgu")
-    parse.add_argument(
+    parse = argparse.ArgumentParser(
+        description="Upgrade and uninstall python package.", prog="pkgu"
+    )
+    sub_parser = parse.add_subparsers(
+        title="Available commands",
+        help="Available commands",
+        dest="command",
+        required=True,
+    )
+
+    # Update the package.
+    parser_update = sub_parser.add_parser("update", help="Update python package.")
+    parser_update.add_argument(
         "-a",
         "--async_upgrade",
         help="Update the library asynchronously. Default: %(default)s",
         action="store_true",
     )
-    parse.add_argument(
+    parser_update.add_argument(
         "-d",
         "--cache_folder",
         help="The cache.db file. Default: %(default)s",
         type=str,
         default="~/.cache/cache.db",
     )
-    parse.add_argument(
+    parser_update.add_argument(
         "-e",
         "--expire_time",
         help="The expiration time. Default: %(default)s",
         type=int,
         default=43200,
     )
-    parse.add_argument(
+    parser_update.add_argument(
         "--no-cache",
         dest="no_cache",
         help="Whether to use db cache. Default: %(default)s",
         action="store_true",
     )
-    parse.add_argument(
+    parser_update.add_argument(
         "-v",
         "--version",
         help="Display %(prog)s version and information",
         action="version",
         version=f"%(prog)s {__version__}",
+    )
+
+    # Remove the package.
+    parser_remove = sub_parser.add_parser(
+        "remove", help="remove python package with its dependencies."
+    )
+    parser_remove.add_argument(
+        "pkg_name", help="specify which package you want to uninstall.", nargs="+"
+    )
+    parser_remove.add_argument(
+        "-l",
+        "--list",
+        action="store_true",
+        default=False,
+        help="list unused dependencies, but don't uninstall them.",
+    )
+    parser_remove.add_argument(
+        "-L",
+        "--leaves",
+        action="store_true",
+        default=False,
+        help="list leaves (packages which are not used by any others).",
+    )
+    parser_remove.add_argument(
+        "-y",
+        "--yes",
+        action="store_true",
+        default=False,
+        help="don't ask for confirmation of uninstall deletions.",
+    )
+    parser_remove.add_argument(
+        "-f",
+        "--freeze",
+        action="store_true",
+        default=False,
+        help="list leaves (packages which are not used by any others) in requirements.txt format",
     )
 
     return parse.parse_args()
@@ -723,10 +1038,8 @@ def user_option_cls_factory(sys_name: str):
         return UserOptions()
 
 
-def entry():
-    """Main entrance."""
-    args = parse_args()
-
+def update_packages(args: "argparse.Namespace"):
+    """Update all out-dated packages."""
     time_s = time.time()
     time_e = 0
 
@@ -790,6 +1103,17 @@ def entry():
                     pass
                 # 打印耗时总时间
                 print_total_time_elapsed(time_s, time_e)
+
+
+def entry():
+    """Main entrance."""
+    args = parse_args()
+
+    if args.command == "update":
+        update_packages(args)
+
+    if args.command == "remove":
+        remove_package_and_dependencies(args)
 
 
 def main():
