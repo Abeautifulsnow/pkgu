@@ -31,10 +31,9 @@ from halo import Halo
 from loguru import logger
 
 try:
-    from pkg_resources import Distribution
+    from pkg_resources import Distribution, get_distribution, working_set
     from pkg_resources import DistributionNotFound as _DistributionNotFound
     from pkg_resources import VersionConflict as _VersionConflict
-    from pkg_resources import get_distribution, working_set
 except (DeprecationWarning, ModuleNotFoundError, ImportError):
     # TODO: Need to develop a backward-compatible version and use other way instead.
     # https://setuptools.pypa.io/en/latest/pkg_resources.html
@@ -71,7 +70,7 @@ if py_version >= (3, 9):
     Tuple = tuple
     List = list
 else:
-    from typing import List, Set, Tuple
+    from typing import List, Tuple
 
 
 # 变量赋值
@@ -781,8 +780,8 @@ def autoremove(names, yes=False):
         remove_dists(dead)
 
 
-def list_dead(names: List[str]):
-    start: Set[Distribution] = set()
+def list_dead(names: list[str]):
+    start: set[Distribution] = set()
     for name in names:
         try:
             print(f"get_distribution(name)={get_distribution(name)}")
@@ -805,7 +804,7 @@ def list_dead(names: List[str]):
     return dead
 
 
-def exclude_whitelist(dists: List[Distribution]):
+def exclude_whitelist(dists: list[Distribution]):
     return {dist for dist in dists if dist.project_name not in WHITELIST}
 
 
@@ -815,7 +814,17 @@ def show_tree(dist: Distribution, dead, indent=0, visited=None):
     if dist in visited:
         return
     visited.add(dist)
-    print(" " * 4 * indent, end="", file=sys.stderr)
+
+    out_display = None
+
+    if indent == 0:
+        out_display = "."
+    elif indent > 1:
+        out_display = " " * indent * 2 + " │" + ("——" * indent)
+    else:
+        out_display = "│" + ("——" * indent * 2)
+
+    print(out_display, end="", file=sys.stderr)
     show_dist(dist)
     for req in requires(dist, False):
         if req in dead:
@@ -858,7 +867,7 @@ def show_freeze(dist: Distribution):
     print(dist.as_requirement())
 
 
-def remove_dists(dists: List[Distribution]):
+def remove_dists(dists: list[Distribution]):
     if sys.executable:
         pip_cmd = [sys.executable, "-m", "pip"]
     else:
@@ -889,7 +898,6 @@ def requires(dist: Distribution, output=True):
                 print("Redoing requirement with just package name...", file=sys.stderr)
             required.append(get_distribution(pkg.project_name))
         except _DistributionNotFound as e:
-            print(f"{dist=}, =========")
             if output:
                 print(e.report(), file=sys.stderr)
                 print(
@@ -912,7 +920,8 @@ def remove_package_and_dependencies(args: "argparse.Namespace"):
         dead = list_dead(args.pkg_name)
         print(" ".join([d.project_name for d in dead]))
     else:
-        autoremove(args.pkg_name, yes=args.yes)
+        print("remove package.")
+        # autoremove(args.pkg_name, yes=args.yes)
 
 
 def get_leaves(graph):
