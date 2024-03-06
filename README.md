@@ -31,6 +31,40 @@ pip3 install pkgu
 
 after the installation is complete, `pkgu` executable file will be written to the python bin directory and you can enter `pkgu -h` command on your terminal to learn how to use it.
 
+```bash
+# Usage
+usage: pkgu [-h] {update,remove} ...
+
+Upgrade and uninstall python package.
+
+options:
+  -h, --help       show this help message and exit
+
+Available commands:
+  {update,remove}  Available commands
+    update         Update python package.
+    remove         remove python package with its dependencies.
+
+# ------ update ------
+options:
+  -h, --help            show this help message and exit
+  -a, --async_upgrade   Update the library asynchronously. Default: False
+  -d CACHE_FOLDER, --cache_folder CACHE_FOLDER
+                        The cache.db file. Default: ~/.cache/cache.db
+  -e EXPIRE_TIME, --expire_time EXPIRE_TIME
+                        The expiration time. Default: 43200
+  --no-cache            Whether to use db cache. Default: False
+  -v, --version         Display pkgu update version and information
+
+# ------ remove ------
+options:
+  -h, --help    show this help message and exit
+  -l, --list    list unused dependencies, but don't uninstall them.
+  -L, --leaves  list leaves (packages which are not used by any others).
+  -y, --yes     don't ask for confirmation of uninstall deletions.
+  -f, --freeze  list leaves (packages which are not used by any others) in requirements.txt format
+```
+
 ## ScreenShoot
 
 > 1. No packages need to be upgraded.
@@ -64,6 +98,12 @@ So now it can support to update the python libraries asynchronously. 🥳
 
 ![img_7.png](https://raw.githubusercontent.com/Abeautifulsnow/pkgu/main/screenshoot/img_7.png)
 
-> 6. !!!New - Support to use cache result from sqlite db file.
+> 6. Support to use cache result from sqlite db file.
+
+> 7. !!!New - Support to uninstall package with its dependencies together.
+
+```bash
+
+```
 
 This improve the expirence that how we list the out-dated packages when they are huge to collect, and then there also is a cli flag `--no-cache` to control whether should to use cache.
