@@ -102,8 +102,6 @@ So now it can support to update the python libraries asynchronously. 🥳
 
 > 7. !!!New - Support to uninstall package with its dependencies together.
 
-```bash
-
-```
+![img_8.png](https://raw.githubusercontent.com/Abeautifulsnow/pkgu/main/screenshoot/img_8.png)
 
 This improve the expirence that how we list the out-dated packages when they are huge to collect, and then there also is a cli flag `--no-cache` to control whether should to use cache.
