@@ -617,7 +617,7 @@ async def run_async(
 
     loop = asyncio.get_event_loop()
 
-    # TODO: 这个写法有问题，会报错（RuntimeError: threads can only be started once）
+    # TODO: RuntimeError: threads can only be started once）
     cmd_s = [
         loop.run_in_executor(
             None,
