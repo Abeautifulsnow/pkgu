@@ -33,12 +33,13 @@ after the installation is complete, `pkgu` executable file will be written to th
 
 ```bash
 # Usage
-usage: pkgu [-h] {update,remove} ...
+usage: pkgu [-h] [-v] {update,remove} ...
 
 Upgrade and uninstall python package.
 
 options:
   -h, --help       show this help message and exit
+  -v, --version    Display pkgu version and information
 
 Available commands:
   {update,remove}  Available commands
@@ -54,7 +55,6 @@ options:
   -e EXPIRE_TIME, --expire_time EXPIRE_TIME
                         The expiration time. Default: 43200
   --no-cache            Whether to use db cache. Default: False
-  -v, --version         Display pkgu update version and information
 
 # ------ remove ------
 options:
@@ -90,18 +90,18 @@ So now it can support to update the python libraries asynchronously. 🥳
 
 > 5. Support for selectable update packages
 
-* List all availbable packages
+- List all availbable packages
 
 ![img_6.png](https://raw.githubusercontent.com/Abeautifulsnow/pkgu/main/screenshoot/img_6.png)
 
-* Select ths part of package to be updated
+- Select ths part of package to be updated
 
 ![img_7.png](https://raw.githubusercontent.com/Abeautifulsnow/pkgu/main/screenshoot/img_7.png)
 
 > 6. Support to use cache result from sqlite db file.
 
+This improve the expirence that how we list the out-dated packages when they are huge to collect, and then there also is a cli flag `--no-cache` to control whether should to use cache.
+
 > 7. !!!New - Support to uninstall package with its dependencies together.
 
 ![img_8.png](https://raw.githubusercontent.com/Abeautifulsnow/pkgu/main/screenshoot/img_8.png)
-
-This improve the expirence that how we list the out-dated packages when they are huge to collect, and then there also is a cli flag `--no-cache` to control whether should to use cache.
