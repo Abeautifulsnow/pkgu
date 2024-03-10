@@ -811,7 +811,7 @@ def list_dead(names: List[str]):
     graph = get_graph()
     dead = exclude_whitelist(find_all_dead(graph, start))
     for d in start:
-        print("[🐬 ⬇️-Target And Its Dependencies-⬇️ 🐬]")
+        print("[🐬 ⬇-Target And Its Dependencies-⬇ 🐬]")
         show_tree(d, dead)
     return dead
 
