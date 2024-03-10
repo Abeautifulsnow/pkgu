@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pkgu"
-version = "0.0.26"
+version = "0.0.27"
 description = "Manage the installed package by providing support for updating and uninstalling."
 authors = ["Abeautifulsnow <lnrunstone.0727@gmail.com>"]
 
