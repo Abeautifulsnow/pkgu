@@ -19,7 +19,7 @@ from collections import defaultdict
 from collections.abc import Generator
 from functools import lru_cache
 from sqlite3 import Connection, Cursor, OperationalError
-from typing import Any, AnyStr, Callable, NewType, Optional, Sequence, Union
+from typing import Any, AnyStr, Callable, Literal, NewType, Optional, Sequence, Union
 
 try:
     import importlib.metadata as importlib_metadata
@@ -66,11 +66,14 @@ else:
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 try:
-    from pkg_resources import Distribution
+    from pkg_resources import (
+        Distribution,
+        ResolutionError,
+        get_distribution,
+        working_set,
+    )
     from pkg_resources import DistributionNotFound as _DistributionNotFound
-    from pkg_resources import ResolutionError
     from pkg_resources import VersionConflict as _VersionConflict
-    from pkg_resources import get_distribution, working_set
 except (DeprecationWarning, ModuleNotFoundError, ImportError):
     # TODO: Need to develop a backward-compatible version and use other way instead.
     # https://setuptools.pypa.io/en/latest/pkg_resources.html
@@ -344,6 +347,8 @@ class WriteDataToModel(PrettyTable):
             field_names=["Name", "Version", "Latest Version", "Latest FileType"],
             border=True,
         )
+
+        self.py_env = py_env
         self.ori_data = self.db.get_result(
             py_env, run_subprocess_cmd, f"{py_env} -m {self.command}"
         )
@@ -436,6 +441,20 @@ class WriteDataToModel(PrettyTable):
             cb_func(packages)
         else:
             cb_func()
+
+    def update_db_data(self):
+        """Update the db data after updating the outdated data."""
+
+        self.spinner.start(
+            "Cause you have updated the outdated packages, you need to update the db data to ensure it is up-to-date."
+        )
+        self.spinner.text_color = "cyan"
+
+        self.db.update_data(
+            self.py_env, run_subprocess_cmd, f"{self.py_env} -m {self.command}"
+        )
+        self.spinner.succeed("👏🏻 Successfully updated the db data.")
+        self.spinner.stop()
 
     # 更新包到最新版本
     def __call__(self, *args, **kwargs):
@@ -587,10 +606,16 @@ def extract_substrings_with_split(s):
 def upgrade_expired_package(
     package_name: T_NAME, old_version: T_VERSION, latest_version: T_LATEST_VERSION
 ) -> Tuple[bool, T_NAME]:
-    def installing_msg(verb):
-        return (
+    def installing_msg(verb: Literal["installing", "installed", "installation failed"]):
+        _text_color = f"{verb} {package_name}, version: from {Fore.CYAN}{old_version}{Style.RESET_ALL} to {Fore.MAGENTA}{latest_version}{Style.RESET_ALL}..."
+        _text_no_color = (
             f"{verb} {package_name}, version: from {old_version} to {latest_version}..."
         )
+
+        if verb == "installing":
+            return _text_no_color
+
+        return _text_color
 
     with Halo(
         text=installing_msg("installing"),
@@ -695,7 +720,19 @@ class DAO:
         else:
             self.cursor.execute(sql_stmt)
 
+        self.conn.commit()
+        if self.cursor.rowcount == -1:
+            print("❌ The execution of sql failed.")
+
     def create_table(self, table_name: str):
+        """Explain the table fields.
+
+        ---
+        `key`: the python environment path.
+        `value`: the result of `pip list --outdated --format=json` returning, but be pickled.
+        `expiration`: expired time.
+        """
+
         create_table = f"""CREATE TABLE IF NOT EXISTS {table_name} (
             key TEXT PRIMARY KEY,
             value BLOB,
@@ -725,7 +762,6 @@ class DAO:
             f"INSERT OR REPLACE INTO {self.table_name} (key, value, expiration) VALUES (?, ?, ?)",
             (db_key, pickled_value, expiration_time),
         )
-        self.conn.commit()
 
     @staticmethod
     def get_cache_key(key: str) -> str:
@@ -737,7 +773,7 @@ class DAO:
     def get_result_with_no_cache(
         self,
         cache_key: str,
-        nocache_fn: Callable[[Union[str, list]], Tuple[str, bool]],
+        nocache_fn: Callable[[Union[str, list]], tuple[str, bool]],
         param: Union[str, list],
     ) -> Tuple[str]:
         cost_time_res, bool_r = nocache_fn(param)
@@ -757,7 +793,7 @@ class DAO:
     def get_result(
         self,
         key: str,
-        nocache_fn: Callable[[Union[str, list]], Tuple[str, bool]],
+        nocache_fn: Callable[[Union[str, list]], tuple[str, bool]],
         param: Union[str, list],
     ) -> Tuple[str]:
         cache_key = self.get_cache_key(key)
@@ -770,6 +806,27 @@ class DAO:
                 return (cache_res,)
             else:
                 return self.get_result_with_no_cache(cache_key, nocache_fn, param)
+
+    def update_data(
+        self,
+        key: str,
+        nocache_fn: Callable[[Union[str, list]], tuple[str, bool]],
+        param: Union[str, list],
+    ):
+        """Update the old data."""
+        cost_time_res, bool_r = nocache_fn(param)
+        if bool_r:
+            expiration_time = int(time.time()) + self.expired_time
+
+            pickled_value = pickle.dumps(cost_time_res)
+            _sql = (
+                f"UPDATE {self.table_name} SET value = ?, expiration = ? WHERE key = ?"
+            )
+
+            cache_key = self.get_cache_key(key)
+            self._execute_sql(_sql, (pickled_value, expiration_time, cache_key))
+        else:
+            raise ValueError(f"The result is wrong. Command: {param}")
 
 
 ##############################################
@@ -1025,7 +1082,7 @@ def parse_args():
     parser_update.add_argument(
         "-e",
         "--expire_time",
-        help="The expiration time. Default: %(default)s",
+        help="The expiration time. Default: %(default)s s",
         type=int,
         default=43200,
     )
@@ -1088,6 +1145,8 @@ def update_packages(args: "argparse.Namespace"):
     time_s = time.time()
     time_e = 0
 
+    update_package_flag = False
+
     with Halo(
         spinner="bouncingBall",
         interval=100,
@@ -1106,10 +1165,12 @@ def update_packages(args: "argparse.Namespace"):
             print_py_env_with_table(python_env)
 
             if len(wdt.model.packages) == 0:
+                # NO PACKAGES NEED TO BE UPDATED.
                 # Print the total cost time.
                 print_total_time_elapsed(time_s)
                 return
             else:
+                # NEED TO UPDATE THE OUTDATED PACKAGE.
                 # Get the current time stamp.
                 time_e = time.time()
 
@@ -1124,9 +1185,10 @@ def update_packages(args: "argparse.Namespace"):
                             if args.async_upgrade:
                                 asyncio.run(run_async(wdt))
                                 # Get the current time stamp.
-                                time_e = time.time()
                             else:
                                 wdt()
+
+                            update_package_flag = True
                         case "portion":
                             select_menus = uo.updateOneOfPackages(wdt.packages)
                             if select_menus:
@@ -1138,12 +1200,17 @@ def update_packages(args: "argparse.Namespace"):
                                 if args.async_upgrade:
                                     asyncio.run(run_async(wdt, select_menus_update))
                                     # Get the current time stamp.
-                                    time_e = time.time()
                                 else:
                                     wdt._has_packages(
                                         select_menus_update, wdt._upgrade_packages
                                     )
                                     wdt.statistic_result()
+
+                                update_package_flag = True
+
+                    if update_package_flag:
+                        wdt.update_db_data()
+                        time_e = time.time()
                 else:
                     pass
                 # Print the total cost time.
